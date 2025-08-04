@@ -1,0 +1,146 @@
+body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #2c3e50;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        h1 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        
+        .current-month {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        
+        .add-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background-color: #2c3e50;
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        tr:hover {
+            background-color: #f1f5f9;
+        }
+        
+        .debit-amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            color: #e74c3c; /* Red for debit */
+        }
+        
+        .credit-amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            color: #27ae60; /* Green for credit */
+        }
+        
+        .running-total {
+            font-weight: bold;
+            text-align: right;
+        }
+        
+        .positive-balance {
+            color: #27ae60;
+        }
+        
+        .negative-balance {
+            color: #e74c3c;
+        }
+        
+        .reimbursable-Y {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .reimbursable-N {
+            color: #e67e22;
+            font-weight: bold;
+        }
+        
+        .category-icon {
+            margin-right: 5px;
+        }
+        
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .total-summary {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .action-btn {
+            background-color: #ecf0f1;
+            border: 1px solid #bdc3c7;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .filter-dropdown {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+        }
+        
+        .date-month {
+            white-space: nowrap;
+        }
+        
+        .opening-balance {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
