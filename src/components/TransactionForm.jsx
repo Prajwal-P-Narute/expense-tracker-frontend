@@ -68,7 +68,7 @@ const TransactionForm = () => {
       comments: formData.comments,
     };
 
-    fetch("http://localhost:8080/api/transactions", {
+    fetch("https://expense-tracker-backend-y788.onrender.com/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
