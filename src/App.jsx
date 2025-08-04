@@ -7,7 +7,7 @@ function App() {
   return (
     <Routes>
     
-     <Route path="/expense-tracker" element={<ExpenseTracker/>} />
+     <Route path="/" element={<ExpenseTracker/>} />
       <Route path="/add-transaction" element={<TransactionForm />} />
     </Routes>
   );

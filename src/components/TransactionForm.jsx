@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './TransactionForm.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -76,7 +76,7 @@ const TransactionForm = () => {
       .then(res => res.json())
       .then(() => {
         alert("Transaction added successfully!");
-        navigate("/expense-tracker");
+        navigate("/");
       })
       .catch(err => console.error("Error:", err));
   };
@@ -85,7 +85,7 @@ const TransactionForm = () => {
     <div className="container">
       <div className="header">
         <h1>Add New Transaction</h1>
-        <button className="back-btn" onClick={() => navigate('/expense-tracker')}>
+        <button className="back-btn" onClick={() => navigate('/')}>
           ← Back to List
         </button>
       </div>
