@@ -10,7 +10,7 @@ const ExpenseTracker = () => {
 
   // Fetch transactions
   useEffect(() => {
-    fetch("http://localhost:8080/api/transactions")
+    fetch("https://expense-tracker-backend-y788.onrender.com/api/transactions")
       .then(res => res.json())
       .then(data => setTransactions(data))
       .catch(err => console.error("Failed to load transactions", err));
@@ -18,7 +18,7 @@ const ExpenseTracker = () => {
 
   // Fetch opening balance
   useEffect(() => {
-    fetch("http://localhost:8080/api/transactions/opening-balance")
+    fetch("https://expense-tracker-backend-y788.onrender.com/api/transactions/opening-balance")
       .then(res => res.json())
       .then(data => setOpeningBalance(data))
       .catch(err => console.error("Failed to load opening balance", err));
