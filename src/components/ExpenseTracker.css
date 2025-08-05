@@ -144,3 +144,150 @@ body {
             background-color: #f8f9fa;
             font-weight: bold;
         }
+
+        /* For Responsiveness for Mobile Users */
+        /* Table scroll wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+
+/* Header adjustment for smaller screens */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Footer responsiveness */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+
+/* Mobile responsiveness */
+@media screen and (max-width: 768px) {
+  h1 {
+    font-size: 1.4rem;
+  }
+
+  .add-btn,
+  .filter-dropdown,
+  .action-btn {
+    width: 100%;
+    font-size: 1rem;
+    padding: 0.75rem;
+  }
+
+  table {
+    font-size: 0.85rem;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .total-summary {
+    font-size: 1rem;
+  }
+
+  .header-right {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: nowrap;          /* No wrapping */
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;           /* Prevent horizontal scroll */
+}
+
+.pagination button {
+  padding: 6px 10px;
+  min-width: 70px;            /* smaller but still clickable */
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  background-color: #4caf50;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;             /* Prevent shrinking */
+}
+
+.pagination button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.pagination button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+  min-width: 0;              /* allow shrinking */
+  flex-grow: 1;              /* expand to fill space */
+  flex-shrink: 1;            /* allow shrinking */
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;   /* Show ... if too long */
+  padding: 0 5px;
+}
+
+/* Additional mobile tweaks */
+@media screen and (max-width: 480px) {
+  .pagination button {
+    min-width: 60px;
+    font-size: 0.8rem;
+    padding: 5px 8px;
+  }
+
+  .pagination span {
+    font-size: 0.85rem;
+    padding: 0 3px;
+  }
+}
+

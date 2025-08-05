@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "./TransactionForm.css";
 import { useNavigate } from "react-router-dom";
+import { BASE_URL } from "../utils/api";
 
 const TransactionForm = () => {
   const navigate = useNavigate();
@@ -12,23 +13,31 @@ const TransactionForm = () => {
     return today.toISOString().split("T")[0];
   };
 
-  // Initialize formData with today's date as default for date field
   const [formData, setFormData] = useState({
     date: getTodayDate(),
     debitCategory: "",
     creditCategory: "",
     debitAmount: "",
     creditAmount: "",
-    reimbursable: "",
+    reimbursable: "N",
     comments: "",
   });
 
   const [type, setType] = useState("debit");
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false); // Prevent double-submit
 
   const handleTypeToggle = (selectedType) => {
     setType(selectedType);
     setErrors({});
+    setFormData((prev) => ({
+      ...prev,
+      debitCategory: "",
+      creditCategory: "",
+      debitAmount: "",
+      creditAmount: "",
+      reimbursable: selectedType === "debit" ? "N" : "",
+    }));
   };
 
   const handleChange = (e) => {
@@ -58,9 +67,24 @@ const TransactionForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const resetForm = () => {
+    setFormData({
+      date: getTodayDate(),
+      debitCategory: "",
+      creditCategory: "",
+      debitAmount: "",
+      creditAmount: "",
+      reimbursable: type === "debit" ? "N" : "",
+      comments: "",
+    });
+    setErrors({});
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+
+    setSubmitting(true);
 
     const payload = {
       date: formData.date,
@@ -72,17 +96,28 @@ const TransactionForm = () => {
       comments: formData.comments,
     };
 
-    fetch("https://expense-tracker-backend-y788.onrender.com/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => res.json())
-      .then(() => {
-        alert("Transaction added successfully!");
+    try {
+      const res = await fetch(`${BASE_URL}/api/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to submit transaction");
+
+      alert("Transaction added successfully!");
+      resetForm();
+
+      // Optional delay before navigating
+      setTimeout(() => {
         navigate("/");
-      })
-      .catch((err) => console.error("Error:", err));
+      }, 500);
+    } catch (error) {
+      console.error("Submission Error:", error);
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -266,8 +301,12 @@ const TransactionForm = () => {
           ></textarea>
         </div>
 
-        <button type="submit" className="submit-btn">
-          Add Transaction
+        <button
+          type="submit"
+          className="submit-btn"
+          disabled={submitting}
+        >
+          {submitting ? "Submitting..." : "Add Transaction"}
         </button>
       </form>
     </div>
