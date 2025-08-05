@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./ExpenseTracker.css";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 
 const ExpenseTracker = () => {
   const netBalanceRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation(); // 👈 Detects route changes
+
   const [transactions, setTransactions] = useState([]);
   const [groupedTransactions, setGroupedTransactions] = useState({});
   const [months, setMonths] = useState([]);
@@ -25,26 +27,34 @@ const ExpenseTracker = () => {
     }, {});
   };
 
-  // Fetch transactions
+  // ✅ Fetch transactions whenever location changes (e.g., after navigating back from "add transaction")
   useEffect(() => {
     fetch(`${BASE_URL}/api/transactions`)
       .then((res) => res.json())
       .then((data) => {
-        const sortedData = data.sort(
-          (a, b) => new Date(b.date) - new Date(a.date)
-        );
+        const sortedData = data.sort((a, b) => {
+          if (a.date === b.date) {
+            const idA = typeof a.id === "number" ? a.id : parseInt(a.id) || 0;
+            const idB = typeof b.id === "number" ? b.id : parseInt(b.id) || 0;
+            return idB - idA;
+          }
+          return new Date(b.date) - new Date(a.date);
+        });
+
         setTransactions(sortedData);
+
         const grouped = groupTransactionsByMonth(sortedData);
         const sortedMonths = Object.keys(grouped).sort(
           (a, b) => new Date(b) - new Date(a)
         );
+
         setGroupedTransactions(grouped);
         setMonths(sortedMonths);
       })
       .catch((err) => console.error("Failed to load transactions", err));
-  }, []);
+  }, [location]); // 👈 re-run when location changes
 
-  // Fetch opening balance
+  // Opening balance only needs to load once
   useEffect(() => {
     fetch(`${BASE_URL}/api/transactions/opening-balance`)
       .then((res) => res.json())
@@ -52,22 +62,11 @@ const ExpenseTracker = () => {
       .catch((err) => console.error("Failed to load opening balance", err));
   }, []);
 
-  // Set current date in header
   useEffect(() => {
     const now = new Date();
     const monthsArr = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
     ];
     document.getElementById("currentDate").textContent = `${now.getDate()} ${
       monthsArr[now.getMonth()]
@@ -117,7 +116,7 @@ const ExpenseTracker = () => {
           <tbody>
             {currentItems.length > 0 ? (
               currentItems.map((entry, index) => (
-                <tr key={index}>
+                <tr key={entry.id || index}>
                   <td className="date-month">
                     {new Date(entry.date).toLocaleDateString()}
                   </td>
@@ -167,7 +166,7 @@ const ExpenseTracker = () => {
         </table>
       </div>
 
-      {/* Pagination controls */}
+      {/* Pagination */}
       <div className="pagination">
         <button
           onClick={() => setCurrentMonthIndex((prev) => Math.max(prev - 1, 0))}
@@ -195,9 +194,7 @@ const ExpenseTracker = () => {
           Current Balance: ₹
           <span id="netBalance" ref={netBalanceRef}>
             {transactions.length > 0
-              ? Number(
-                  transactions[transactions.length - 1].runningBalance
-                ).toLocaleString()
+              ? Number(transactions[0].runningBalance).toLocaleString()
               : Number(openingBalance).toLocaleString()}
           </span>
         </div>
