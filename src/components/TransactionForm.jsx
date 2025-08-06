@@ -26,6 +26,8 @@ const TransactionForm = () => {
   const [type, setType] = useState("debit");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false); // Prevent double-submit
+  const token = localStorage.getItem("token");
+
 
   const handleTypeToggle = (selectedType) => {
     setType(selectedType);
@@ -99,9 +101,14 @@ const TransactionForm = () => {
     try {
       const res = await fetch(`${BASE_URL}/api/transactions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+
         body: JSON.stringify(payload),
       });
+      
 
       if (!res.ok) throw new Error("Failed to submit transaction");
 
@@ -301,11 +308,7 @@ const TransactionForm = () => {
           ></textarea>
         </div>
 
-        <button
-          type="submit"
-          className="submit-btn"
-          disabled={submitting}
-        >
+        <button type="submit" className="submit-btn" disabled={submitting}>
           {submitting ? "Submitting..." : "Add Transaction"}
         </button>
       </form>

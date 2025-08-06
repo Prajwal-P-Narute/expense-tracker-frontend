@@ -1,152 +1,155 @@
 body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f7fa;
-            color: #2c3e50;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 20px;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        h1 {
-            margin: 0;
-            color: #2c3e50;
-        }
-        
-        .current-month {
-            font-weight: bold;
-            color: #7f8c8d;
-        }
-        
-        .add-btn {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th {
-            background-color: #2c3e50;
-            color: white;
-            padding: 12px 15px;
-            text-align: left;
-        }
-        
-        td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-        
-        tr:hover {
-            background-color: #f1f5f9;
-        }
-        
-        .debit-amount {
-            text-align: right;
-            font-family: 'Courier New', monospace;
-            color: #e74c3c; /* Red for debit */
-        }
-        
-        .credit-amount {
-            text-align: right;
-            font-family: 'Courier New', monospace;
-            color: #27ae60; /* Green for credit */
-        }
-        
-        .running-total {
-            font-weight: bold;
-            text-align: right;
-        }
-        
-        .positive-balance {
-            color: #27ae60;
-        }
-        
-        .negative-balance {
-            color: #e74c3c;
-        }
-        
-        .reimbursable-Y {
-            color: #27ae60;
-            font-weight: bold;
-        }
-        
-        .reimbursable-N {
-            color: #e67e22;
-            font-weight: bold;
-        }
-        
-        .category-icon {
-            margin-right: 5px;
-        }
-        
-        .footer {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
-        }
-        
-        .total-summary {
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        
-        .action-btn {
-            background-color: #ecf0f1;
-            border: 1px solid #bdc3c7;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        
-        .filter-dropdown {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #bdc3c7;
-        }
-        
-        .date-month {
-            white-space: nowrap;
-        }
-        
-        .opening-balance {
-            background-color: #f8f9fa;
-            font-weight: bold;
-        }
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f5f7fa;
+  color: #2c3e50;
+}
 
-        /* For Responsiveness for Mobile Users */
-        /* Table scroll wrapper */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+h1 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.current-month {
+  font-weight: bold;
+  color: #7f8c8d;
+}
+
+.add-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background-color: #2c3e50;
+  color: white;
+  padding: 12px 15px;
+  text-align: left;
+}
+
+td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+}
+
+tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+tr:hover {
+  background-color: #f1f5f9;
+}
+
+.debit-amount {
+  text-align: right;
+  font-family: "Courier New", monospace;
+  color: #e74c3c; /* Red for debit */
+}
+
+.credit-amount {
+  text-align: right;
+  font-family: "Courier New", monospace;
+  color: #27ae60; /* Green for credit */
+}
+
+.running-total {
+  font-weight: bold;
+  text-align: right;
+}
+
+.positive-balance {
+  color: #27ae60;
+}
+
+.negative-balance {
+  color: #e74c3c;
+}
+
+.reimbursable-Y {
+  color: #27ae60;
+  font-weight: bold;
+}
+
+.reimbursable-N {
+  color: #e67e22;
+  font-weight: bold;
+}
+
+.category-icon {
+  margin-right: 5px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.total-summary {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.action-btn {
+  padding: 6px 10px; /* reduced padding */
+  font-size: 0.85rem; /* smaller font */
+  border-radius: 4px;
+  background-color: #ecf0f1;
+  border: 1px solid #bdc3c7;
+  cursor: pointer;
+}
+
+.filter-dropdown {
+  padding: 6px 8px; /* reduced padding */
+  font-size: 0.85rem; /* smaller font */
+  border-radius: 4px;
+  border: 1px solid #bdc3c7;
+  width: auto; /* prevents too wide select */
+  min-width: 120px;
+}
+
+.date-month {
+  white-space: nowrap;
+}
+
+.opening-balance {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+/* For Responsiveness for Mobile Users */
+/* Table scroll wrapper */
 .table-wrapper {
   overflow-x: auto;
   width: 100%;
@@ -182,7 +185,6 @@ body {
   flex-wrap: wrap;
 }
 
-
 /* Mobile responsiveness */
 @media screen and (max-width: 768px) {
   h1 {
@@ -192,9 +194,10 @@ body {
   .add-btn,
   .filter-dropdown,
   .action-btn {
-    width: 100%;
-    font-size: 1rem;
-    padding: 0.75rem;
+    width: 100px; /* Set a fixed smaller width for mobile */
+  padding: 5px 6px;
+  font-size: 0.75rem;
+  text-align: center;
   }
 
   table {
@@ -233,15 +236,15 @@ body {
   align-items: center;
   gap: 0.5rem;
   margin: 1.5rem 0;
-  flex-wrap: nowrap;          /* No wrapping */
+  flex-wrap: nowrap; /* No wrapping */
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;           /* Prevent horizontal scroll */
+  overflow: hidden; /* Prevent horizontal scroll */
 }
 
 .pagination button {
   padding: 6px 10px;
-  min-width: 70px;            /* smaller but still clickable */
+  min-width: 70px; /* smaller but still clickable */
   font-size: 0.85rem;
   font-weight: 600;
   border: none;
@@ -251,7 +254,7 @@ body {
   cursor: pointer;
   transition: background-color 0.3s ease;
   white-space: nowrap;
-  flex-shrink: 0;             /* Prevent shrinking */
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .pagination button:hover:not(:disabled) {
@@ -267,13 +270,13 @@ body {
   font-size: 0.9rem;
   font-weight: 500;
   color: #333;
-  min-width: 0;              /* allow shrinking */
-  flex-grow: 1;              /* expand to fill space */
-  flex-shrink: 1;            /* allow shrinking */
+  min-width: 0; /* allow shrinking */
+  flex-grow: 1; /* expand to fill space */
+  flex-shrink: 1; /* allow shrinking */
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;   /* Show ... if too long */
+  text-overflow: ellipsis; /* Show ... if too long */
   padding: 0 5px;
 }
 
@@ -291,3 +294,20 @@ body {
   }
 }
 
+.logout-btn {
+  margin-left: 10px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background-color: #d32f2f;
+}
+
+.total-summary > div {
+  margin-bottom: 5px;
+}

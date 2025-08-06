@@ -3,18 +3,24 @@ import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 
-const ExpenseTracker = () => {
+const ExpenseTracker = ({ setToken }) => {
   const netBalanceRef = useRef(null);
   const navigate = useNavigate();
-  const location = useLocation(); // 👈 Detects route changes
+  const location = useLocation();
 
   const [transactions, setTransactions] = useState([]);
   const [groupedTransactions, setGroupedTransactions] = useState({});
   const [months, setMonths] = useState([]);
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [openingBalance, setOpeningBalance] = useState(0);
+  const [totalIncome, setTotalIncome] = useState(0);
+  const [totalExpense, setTotalExpense] = useState(0);
 
-  // Group transactions by "YYYY-MM"
+  const token = localStorage.getItem("token");
+
+  const currentMonthKey = months[currentMonthIndex];
+  const currentItems = groupedTransactions[currentMonthKey] || [];
+
   const groupTransactionsByMonth = (transactions) => {
     return transactions.reduce((acc, transaction) => {
       const date = new Date(transaction.date);
@@ -27,11 +33,27 @@ const ExpenseTracker = () => {
     }, {});
   };
 
-  // ✅ Fetch transactions whenever location changes (e.g., after navigating back from "add transaction")
   useEffect(() => {
-    fetch(`${BASE_URL}/api/transactions`)
-      .then((res) => res.json())
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    fetch(`${BASE_URL}/api/transactions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          // Unauthorized, token expired or invalid
+          localStorage.removeItem("token");
+          navigate("/login");
+          return;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) return;
         const sortedData = data.sort((a, b) => {
           if (a.date === b.date) {
             const idA = typeof a.id === "number" ? a.id : parseInt(a.id) || 0;
@@ -52,29 +74,70 @@ const ExpenseTracker = () => {
         setMonths(sortedMonths);
       })
       .catch((err) => console.error("Failed to load transactions", err));
-  }, [location]); // 👈 re-run when location changes
+  }, [location, navigate, token]);
 
-  // Opening balance only needs to load once
   useEffect(() => {
-    fetch(`${BASE_URL}/api/transactions/opening-balance`)
+    if (!token) return;
+    fetch(`${BASE_URL}/api/transactions/opening-balance`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then((res) => res.json())
       .then((data) => setOpeningBalance(data))
       .catch((err) => console.error("Failed to load opening balance", err));
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     const now = new Date();
     const monthsArr = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December",
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ];
-    document.getElementById("currentDate").textContent = `${now.getDate()} ${
-      monthsArr[now.getMonth()]
-    } ${now.getFullYear()}`;
+    const el = document.getElementById("currentDate");
+    if (el) {
+      el.textContent = `${now.getDate()} ${
+        monthsArr[now.getMonth()]
+      } ${now.getFullYear()}`;
+    }
   }, []);
 
-  const currentMonthKey = months[currentMonthIndex];
-  const currentItems = groupedTransactions[currentMonthKey] || [];
+  //   for display purposes, we calculate total income and expense
+  //   based on the current month's transactions
+  useEffect(() => {
+    let income = 0;
+    let expense = 0;
+
+    currentItems.forEach((tx) => {
+      if (tx.type === "credit") {
+        income += Number(tx.amount);
+      } else if (tx.type === "debit") {
+        expense += Number(tx.amount);
+      }
+    });
+
+    setTotalIncome(income);
+    setTotalExpense(expense);
+  }, [currentItems]);
+
+  
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    sessionStorage.clear(); // optional: clear session data
+    setToken(null);
+    navigate("/login");
+  };
 
   return (
     <div className="container">
@@ -87,6 +150,10 @@ const ExpenseTracker = () => {
             onClick={() => navigate("/add-transaction")}
           >
             + Add Transaction
+          </button>
+
+          <button className="logout-btn" onClick={handleLogout}>
+            Logout
           </button>
         </div>
       </div>
@@ -123,14 +190,28 @@ const ExpenseTracker = () => {
                   <td>{entry.category}</td>
                   <td>{entry.comments}</td>
                   <td className="debit-amount">
-                    {entry.type === "debit"
-                      ? Number(entry.amount).toLocaleString()
-                      : "-"}
+                    {entry.type === "debit" ? (
+                      <strong>
+                        {Number(entry.amount).toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </strong>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="credit-amount">
-                    {entry.type === "credit"
-                      ? Number(entry.amount).toLocaleString()
-                      : "-"}
+                    {entry.type === "credit" ? (
+                      <strong>
+                        {Number(entry.amount).toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </strong>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td
                     className={
@@ -148,7 +229,10 @@ const ExpenseTracker = () => {
                         : "positive-balance"
                     }`}
                   >
-                    {Number(entry.runningBalance).toLocaleString()}
+                    {Number(entry.runningBalance).toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </td>
                 </tr>
               ))
@@ -166,7 +250,6 @@ const ExpenseTracker = () => {
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="pagination">
         <button
           onClick={() => setCurrentMonthIndex((prev) => Math.max(prev - 1, 0))}
@@ -191,13 +274,41 @@ const ExpenseTracker = () => {
 
       <div className="footer">
         <div className="total-summary">
-          Current Balance: ₹
-          <span id="netBalance" ref={netBalanceRef}>
-            {transactions.length > 0
-              ? Number(transactions[0].runningBalance).toLocaleString()
-              : Number(openingBalance).toLocaleString()}
-          </span>
+          <div>
+            <strong>Current Balance:</strong> ₹
+            <span id="netBalance" ref={netBalanceRef}>
+              {transactions.length > 0
+                ? Number(transactions[0].runningBalance).toLocaleString(
+                    "en-IN",
+                    {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }
+                  )
+                : Number(openingBalance).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+            </span>
+          </div>
+
+          <div>
+            <strong>Total Income:</strong> ₹
+            {totalIncome.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </div>
+
+          <div>
+            <strong>Total Expense:</strong> ₹
+            {totalExpense.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </div>
         </div>
+
         <div className="footer-actions">
           <select className="filter-dropdown">
             <option>All Categories</option>
