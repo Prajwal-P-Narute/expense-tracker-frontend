@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
@@ -19,7 +19,10 @@ const ExpenseTracker = ({ setToken }) => {
   const token = localStorage.getItem("token");
 
   const currentMonthKey = months[currentMonthIndex];
-  const currentItems = groupedTransactions[currentMonthKey] || [];
+  const currentItems = useMemo(() => {
+  return groupedTransactions[currentMonthKey] || [];
+}, [groupedTransactions, currentMonthKey]);
+
 
   const groupTransactionsByMonth = (transactions) => {
     return transactions.reduce((acc, transaction) => {
