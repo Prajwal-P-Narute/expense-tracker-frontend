@@ -9,88 +9,93 @@ const ExpenseTracker = ({ setToken }) => {
   const location = useLocation();
 
   const [transactions, setTransactions] = useState([]);
-  const [groupedTransactions, setGroupedTransactions] = useState({});
-  const [months, setMonths] = useState([]);
-  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+
   const [openingBalance, setOpeningBalance] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
 
   const token = localStorage.getItem("token");
 
-  const currentMonthKey = months[currentMonthIndex];
-  const currentItems = useMemo(() => {
-  return groupedTransactions[currentMonthKey] || [];
-}, [groupedTransactions, currentMonthKey]);
-
-
-  const groupTransactionsByMonth = (transactions) => {
-    return transactions.reduce((acc, transaction) => {
-      const date = new Date(transaction.date);
-      const yearMonth = `${date.getFullYear()}-${String(
-        date.getMonth() + 1
-      ).padStart(2, "0")}`;
-      if (!acc[yearMonth]) acc[yearMonth] = [];
-      acc[yearMonth].push(transaction);
-      return acc;
-    }, {});
-  };
-
+  // Fetch opening balance and transactions together
   useEffect(() => {
     if (!token) {
       navigate("/login");
       return;
     }
-    fetch(`${BASE_URL}/api/transactions`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => {
+
+    Promise.all([
+      fetch(`${BASE_URL}/api/transactions/opening-balance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((res) => res.json()),
+
+      fetch(`${BASE_URL}/api/transactions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((res) => {
         if (res.status === 401) {
-          // Unauthorized, token expired or invalid
           localStorage.removeItem("token");
           navigate("/login");
-          return;
+          return null;
         }
         return res.json();
-      })
-      .then((data) => {
+      }),
+    ])
+      .then(([openingBal, data]) => {
         if (!data) return;
-        const sortedData = data.sort((a, b) => {
-          if (a.date === b.date) {
-            const idA = typeof a.id === "number" ? a.id : parseInt(a.id) || 0;
-            const idB = typeof b.id === "number" ? b.id : parseInt(b.id) || 0;
-            return idB - idA;
+
+        setOpeningBalance(openingBal);
+
+        // Sort descending by date, then descending by id (newest first)
+        const sortedDesc = data.sort((a, b) => {
+          const dateA = new Date(a.date);
+          const dateB = new Date(b.date);
+
+          if (dateA.getTime() === dateB.getTime()) {
+            const idA = Number(a.id);
+            const idB = Number(b.id);
+
+            if (!isNaN(idA) && !isNaN(idB)) {
+              return idB - idA;
+            } else {
+              if (b.id > a.id) return 1;
+              if (b.id < a.id) return -1;
+              return 0;
+            }
           }
-          return new Date(b.date) - new Date(a.date);
+          return dateB - dateA;
         });
 
-        setTransactions(sortedData);
-
-        const grouped = groupTransactionsByMonth(sortedData);
-        const sortedMonths = Object.keys(grouped).sort(
-          (a, b) => new Date(b) - new Date(a)
-        );
-
-        setGroupedTransactions(grouped);
-        setMonths(sortedMonths);
+        setTransactions(sortedDesc);
+        setCurrentPage(1);
       })
-      .catch((err) => console.error("Failed to load transactions", err));
+      .catch((err) => console.error("Failed to load data", err));
   }, [location, navigate, token]);
 
-  useEffect(() => {
-    if (!token) return;
-    fetch(`${BASE_URL}/api/transactions/opening-balance`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => setOpeningBalance(data))
-      .catch((err) => console.error("Failed to load opening balance", err));
-  }, [token]);
+  // Slice transactions for current page (newest first shown)
+  const currentItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return transactions.slice(start, start + pageSize);
+  }, [transactions, currentPage]);
 
+  // Calculate total income and expense for ALL transactions combined
+  useEffect(() => {
+    let income = 0;
+    let expense = 0;
+
+    transactions.forEach((tx) => {
+      if (tx.type === "credit") {
+        income += Number(tx.amount);
+      } else if (tx.type === "debit") {
+        expense += Number(tx.amount);
+      }
+    });
+
+    setTotalIncome(income);
+    setTotalExpense(expense);
+  }, [transactions]);
+
+  // Set current date display
   useEffect(() => {
     const now = new Date();
     const monthsArr = [
@@ -109,38 +114,22 @@ const ExpenseTracker = ({ setToken }) => {
     ];
     const el = document.getElementById("currentDate");
     if (el) {
-      el.textContent = `${now.getDate()} ${
-        monthsArr[now.getMonth()]
-      } ${now.getFullYear()}`;
+      el.textContent = `${now.getDate()} ${monthsArr[now.getMonth()]} ${now.getFullYear()}`;
     }
   }, []);
 
-  //   for display purposes, we calculate total income and expense
-  //   based on the current month's transactions
-  useEffect(() => {
-    let income = 0;
-    let expense = 0;
-
-    currentItems.forEach((tx) => {
-      if (tx.type === "credit") {
-        income += Number(tx.amount);
-      } else if (tx.type === "debit") {
-        expense += Number(tx.amount);
-      }
-    });
-
-    setTotalIncome(income);
-    setTotalExpense(expense);
-  }, [currentItems]);
-
-  
-
   const handleLogout = () => {
     localStorage.removeItem("token");
-    sessionStorage.clear(); // optional: clear session data
+    sessionStorage.clear();
     setToken(null);
     navigate("/login");
   };
+
+  // Current Balance: runningBalance of newest transaction (first element in sorted descending array)
+  const finalBalance =
+    transactions.length > 0
+      ? transactions[0].runningBalance
+      : openingBalance;
 
   return (
     <div className="container">
@@ -148,28 +137,23 @@ const ExpenseTracker = ({ setToken }) => {
         <h1>Expense Tracker</h1>
         <div className="header-right">
           <span id="currentDate" className="current-month"></span>
-          <button
-            className="add-btn"
-            onClick={() => navigate("/add-transaction")}
-          >
-            + Add Transaction
-          </button>
+          <div className="button-group">
+            <button
+              className="add-btn"
+              onClick={() => navigate("/add-transaction")}
+            >
+              + Add Transaction
+            </button>
 
-          <button className="logout-btn" onClick={handleLogout}>
-            Logout
-          </button>
+            <button className="logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="table-wrapper">
-        <h2 className="month-heading">
-          {currentMonthKey
-            ? new Date(`${currentMonthKey}-01`).toLocaleString("default", {
-                month: "long",
-                year: "numeric",
-              })
-            : "No Transactions Yet"}
-        </h2>
+        <h2 className="month-heading">Transactions</h2>
 
         <table>
           <thead>
@@ -218,13 +202,12 @@ const ExpenseTracker = ({ setToken }) => {
                   </td>
                   <td
                     className={
-                      entry.reimbursable === "Y"
-                        ? "reimbursable-Y"
-                        : "reimbursable-N"
+                      entry.reimbursable ? "reimbursable-Y" : "reimbursable-N"
                     }
                   >
-                    {entry.reimbursable}
+                    {entry.reimbursable ? "Y" : "N"}
                   </td>
+
                   <td
                     className={`running-total ${
                       entry.runningBalance < 0
@@ -241,11 +224,8 @@ const ExpenseTracker = ({ setToken }) => {
               ))
             ) : (
               <tr>
-                <td
-                  colSpan="7"
-                  style={{ textAlign: "center", padding: "1rem" }}
-                >
-                  No transactions for this month.
+                <td colSpan="7" style={{ textAlign: "center", padding: "1rem" }}>
+                  No transactions to display.
                 </td>
               </tr>
             )}
@@ -255,21 +235,21 @@ const ExpenseTracker = ({ setToken }) => {
 
       <div className="pagination">
         <button
-          onClick={() => setCurrentMonthIndex((prev) => Math.max(prev - 1, 0))}
-          disabled={currentMonthIndex === 0}
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
         >
           ← Previous
         </button>
         <span>
-          Page {currentMonthIndex + 1} of {months.length}
+          Page {currentPage} of {Math.ceil(transactions.length / pageSize)}
         </span>
         <button
           onClick={() =>
-            setCurrentMonthIndex((prev) =>
-              Math.min(prev + 1, months.length - 1)
+            setCurrentPage((prev) =>
+              Math.min(prev + 1, Math.ceil(transactions.length / pageSize))
             )
           }
-          disabled={currentMonthIndex === months.length - 1}
+          disabled={currentPage === Math.ceil(transactions.length / pageSize)}
         >
           Next →
         </button>
@@ -279,19 +259,14 @@ const ExpenseTracker = ({ setToken }) => {
         <div className="total-summary">
           <div>
             <strong>Current Balance:</strong> ₹
-            <span id="netBalance" ref={netBalanceRef}>
-              {transactions.length > 0
-                ? Number(transactions[0].runningBalance).toLocaleString(
-                    "en-IN",
-                    {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }
-                  )
-                : Number(openingBalance).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+            <span
+              id="netBalance"
+              ref={netBalanceRef}
+            >
+              {Number(finalBalance).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
           </div>
 

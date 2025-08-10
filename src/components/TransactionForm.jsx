@@ -108,7 +108,6 @@ const TransactionForm = () => {
 
         body: JSON.stringify(payload),
       });
-      
 
       if (!res.ok) throw new Error("Failed to submit transaction");
 
@@ -168,7 +167,7 @@ const TransactionForm = () => {
             }`}
             onClick={() => handleTypeToggle("credit")}
           >
-            Credit
+            Credit  
           </button>
         </div>
 
