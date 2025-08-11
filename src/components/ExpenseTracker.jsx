@@ -15,7 +15,7 @@ const ExpenseTracker = ({ setToken }) => {
   const [openingBalance, setOpeningBalance] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
-
+// jkajdkj
   const token = localStorage.getItem("token");
 
   // Fetch opening balance and transactions together
