@@ -141,3 +141,127 @@ input:focus, select:focus, textarea:focus {
     color: white;
 }
 
+/* Dropdown styles */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  background-color: #2980b9;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+  user-select: none;
+}
+
+.dropdown-toggle:hover,
+.dropdown-toggle:focus {
+  background-color: #1c5980;
+  outline: none;
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  margin-top: 6px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 140px;
+  z-index: 1000;
+  list-style: none;
+  padding: 0;
+}
+
+.dropdown-menu li {
+  border-bottom: 1px solid #eee;
+}
+
+.dropdown-menu li:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-weight: 600;
+  color: #e74c3c;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: #fceae9;
+  outline: none;
+}
+
+.user-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+  z-index: 100;
+}
+
+/* Mobile: move dropdown to fixed top-right corner */
+@media screen and (max-width: 480px) {
+  .user-dropdown-wrapper {
+    position: fixed !important;
+    top: 10px;
+    right: 10px;
+    z-index: 9999;
+  }
+
+  /* Adjust dropdown menu position since parent is fixed */
+  .user-dropdown-wrapper > div.position-absolute {
+    top: 50px !important; /* below the circle */
+    right: 0 !important;
+  }
+}
+
+.add-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 0 20px; /* horizontal padding */
+  height: 40px; /* same as dropdown circle */
+  min-width: 140px; /* fixed width */
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.add-btn:hover {
+  background-color: #2980b9;
+}
+
+.header-right {
+  display: flex;
+  align-items: center; /* vertically center */
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+  align-items: center; /* vertically center */
+}
+
+
+
+

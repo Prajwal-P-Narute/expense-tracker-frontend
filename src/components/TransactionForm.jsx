@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./TransactionForm.css";
 import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
+import { toast } from "react-toastify";
 
 const TransactionForm = () => {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ const TransactionForm = () => {
   const [type, setType] = useState("debit");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false); // Prevent double-submit
-  const token = localStorage.getItem("token");
+  // const token = localStorage.getItem("token");
 
 
   const handleTypeToggle = (selectedType) => {
@@ -103,15 +104,15 @@ const TransactionForm = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          
         },
-
+        credentials: "include", // ✅ Send cookie
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Failed to submit transaction");
 
-      alert("Transaction added successfully!");
+      toast.success("Transaction added successfully!");
       resetForm();
 
       // Optional delay before navigating

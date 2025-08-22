@@ -1,10 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
-import "./Register.css";
+import { toast } from "react-toastify";
 
 const Register = () => {
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    openingBalance: "",
+  });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -18,120 +23,99 @@ const Register = () => {
     setMessage("");
     setError("");
 
+    const payload = {
+    ...form,
+    openingBalance: form.openingBalance ? Number(form.openingBalance) : 0,
+  };
+
     try {
       const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
         setMessage("Registration successful! Redirecting to login...");
+        toast.success("Registration successful! Redirecting to login...");
         setForm({ name: "", email: "", password: "" });
         setTimeout(() => navigate("/login"), 2000);
       } else {
         const text = await res.text();
         setError(text || "Failed to register");
+        toast.error(text || "Failed to register");
       }
     } catch {
       setError("Network error");
+      toast.error("Network error, please try again");
     }
   };
 
   return (
-    <div>
-      <section
-        className="vh-100 bg-image"
-        style={{
-          backgroundImage:
-            "url('https://mdbcdn.b-cdn.net/img/Photos/new-templates/search-box/img4.webp')",
-        }}
+    <div
+      className="d-flex align-items-center justify-content-center vh-100"
+      style={{ background: "linear-gradient(90deg, #6a5af9, #8268f9)" }}
+    >
+      <div
+        className="rounded-4 p-5 bg-white"
+        style={{ width: "100%", maxWidth: "400px" }}
       >
-        <div className="mask d-flex align-items-center h-100 gradient-custom-3">
-          <div className="container h-100">
-            <div className="row d-flex justify-content-center align-items-center h-100">
-              <div className="col-12 col-md-9 col-lg-7 col-xl-6">
-                <div className="card" style={{ borderRadius: "15px" }}>
-                  <div className="card-body p-5">
-                    <h2 className="text-uppercase text-center mb-5">
-                      Create an account
-                    </h2>
+        <h4 className="text-center mb-4">Create an Account</h4>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            id="name"
+            className="form-control mb-3"
+            placeholder="Your Name"
+            value={form.name}
+            onChange={handleChange}
+            required
+          />
 
-                    <form onSubmit={handleSubmit} noValidate>
-                      <div data-mdb-input-init className="form-outline mb-4">
-                        <input
-                          type="text"
-                          id="name"
-                          className="form-control form-control-lg"
-                          value={form.name}
-                          onChange={handleChange}
-                          required
-                        />
-                        <label className="form-label" htmlFor="name">
-                          Your Name
-                        </label>
-                      </div>
+          <input
+            type="email"
+            id="email"
+            className="form-control mb-3"
+            placeholder="Your Email"
+            value={form.email}
+            onChange={handleChange}
+            required
+          />
 
-                      <div data-mdb-input-init className="form-outline mb-4">
-                        <input
-                          type="email"
-                          id="email"
-                          className="form-control form-control-lg"
-                          value={form.email}
-                          onChange={handleChange}
-                          required
-                        />
-                        <label className="form-label" htmlFor="email">
-                          Your Email
-                        </label>
-                      </div>
+          <input
+            type="password"
+            id="password"
+            className="form-control mb-3"
+            placeholder="Password"
+            value={form.password}
+            onChange={handleChange}
+            required
+          />
 
-                      <div data-mdb-input-init className="form-outline mb-4">
-                        <input
-                          type="password"
-                          id="password"
-                          className="form-control form-control-lg"
-                          value={form.password}
-                          onChange={handleChange}
-                          required
-                        />
-                        <label className="form-label" htmlFor="password">
-                          Password
-                        </label>
-                      </div>
+          <input
+            type="number"
+            id="openingBalance" 
+            className="form-control mb-3"
+            placeholder="Opening Balance (optional)"
+            value={form.openingBalance || ""}
+            onChange={handleChange}
+          />
 
-                      {message && (
-                        <p className="text-success text-center">{message}</p>
-                      )}
-                      {error && (
-                        <p className="text-danger text-center">{error}</p>
-                      )}
+          {message && <p className="text-success text-center">{message}</p>}
+          {error && <p className="text-danger text-center">{error}</p>}
 
-                      <div className="d-flex justify-content-center">
-                        <button
-                          type="submit"
-                          data-mdb-button-init
-                          data-mdb-ripple-init
-                          className="btn btn-success btn-block btn-lg gradient-custom-4 text-body"
-                        >
-                          Register
-                        </button>
-                      </div>
+          <button type="submit" className="btn btn-primary w-100 mb-3">
+            Register
+          </button>
 
-                      <p className="text-center text-muted mt-5 mb-0">
-                        Have already an account?{" "}
-                        <a href="/login" className="fw-bold text-body">
-                          <u>Login here</u>
-                        </a>
-                      </p>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+          <p className="text-center text-muted">
+            Have an account?{" "}
+            <a href="/login" className="fw-bold">
+              Login here
+            </a>
+          </p>
+        </form>
+      </div>
     </div>
   );
 };

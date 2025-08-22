@@ -5,6 +5,8 @@ import Register from './pages/Register';
 import ExpenseTracker from './components/ExpenseTracker';
 import TransactionForm from './components/TransactionForm';
 import { useState, useEffect } from 'react';
+import { ToastContainer } from 'react-toastify';
+import ResetPassword from './pages/ResetPassword';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -23,6 +25,7 @@ function App() {
 
 
   return (
+     <>
      <Routes>
       <Route path="/" element={<Navigate to="/login" />} />
 
@@ -41,7 +44,12 @@ function App() {
           token ? <TransactionForm /> : <Navigate to="/login" />
         }
       />
+
+      <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>
+    <ToastContainer/>
+     </>
+    
   );
 }
 
