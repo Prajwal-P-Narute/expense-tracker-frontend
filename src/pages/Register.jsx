@@ -111,7 +111,18 @@ const Register = () => {
           {error && <p className="text-danger text-center">{error}</p>}
 
           <button type="submit" className="btn btn-primary w-100 mb-3" disabled={loading}>
-            {loading ? "Registering..." : "Register"}
+            {loading ? (
+    <>
+      <span
+        className="spinner-border spinner-border-sm me-2"
+        role="status"
+        aria-hidden="true"
+      ></span>
+      Please wait...
+    </>
+  ) : (
+    "Register"
+  )}
           </button>
 
           <p className="text-center text-muted">

@@ -3,13 +3,17 @@ import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 import { toast } from "react-toastify";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
 
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const [transactions, setTransactions] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [reimbursable, setReimbursable] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
 
@@ -23,10 +27,12 @@ const ExpenseTracker = ({ setToken }) => {
   const token = localStorage.getItem("token");
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const userData = { name: "" };
 
+  // close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -34,9 +40,7 @@ const ExpenseTracker = ({ setToken }) => {
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -72,14 +76,21 @@ const ExpenseTracker = ({ setToken }) => {
 
   const categories = useMemo(() => {
     const unique = new Set(transactions.map((t) => t.category));
-    return ["All Categories", ...Array.from(unique)];
+    return ["All", ...Array.from(unique)];
   }, [transactions]);
 
+  // ✅ Filtering Logic
   const filteredTransactions = useMemo(() => {
-    let filtered =
-      selectedCategory === "All Categories"
-        ? transactions
-        : transactions.filter((t) => t.category === selectedCategory);
+    let filtered = transactions;
+
+    if (selectedCategory !== "All") {
+      filtered = filtered.filter((t) => t.category === selectedCategory);
+    }
+
+    if (reimbursable !== "All") {
+      const flag = reimbursable === "Yes";
+      filtered = filtered.filter((t) => t.reimbursable === flag);
+    }
 
     if (startDate) {
       const start = new Date(startDate);
@@ -94,13 +105,12 @@ const ExpenseTracker = ({ setToken }) => {
     return filtered.sort((a, b) => {
       const dateTimeA = new Date(`${a.date}T${a.time}`);
       const dateTimeB = new Date(`${b.date}T${b.time}`);
-
       if (dateTimeA.getTime() === dateTimeB.getTime()) {
         return Number(b.id) - Number(a.id);
       }
       return dateTimeB - dateTimeA;
     });
-  }, [transactions, selectedCategory, startDate, endDate]);
+  }, [transactions, selectedCategory, reimbursable, startDate, endDate]);
 
   const currentItems = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -125,7 +135,8 @@ const ExpenseTracker = ({ setToken }) => {
       "July","August","September","October","November","December",
     ];
     const el = document.getElementById("currentDate");
-    if (el) el.textContent = `${now.getDate()} ${monthsArr[now.getMonth()]} ${now.getFullYear()}`;
+    if (el)
+      el.textContent = `${now.getDate()} ${monthsArr[now.getMonth()]} ${now.getFullYear()}`;
   }, []);
 
   const handleLogout = () => {
@@ -136,8 +147,137 @@ const ExpenseTracker = ({ setToken }) => {
     toast.success("Logged out successfully");
   };
 
+  const resetFilters = () => {
+    setSelectedCategory("All");
+    setReimbursable("All");
+    setStartDate("");
+    setEndDate("");
+    setCurrentPage(1);
+  };
+
   const finalBalance =
     transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
+
+
+
+  // ✅ Export PDF handler
+const handleExportPDF = () => {
+  const doc = new jsPDF();
+
+  // --- Title Banner ---
+  doc.setFillColor(41, 128, 185); // blue banner
+  doc.rect(0, 0, 210, 20, "F"); // full width rectangle
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.text("Expense Report", 105, 13, { align: "center" });
+
+  // --- Report Date ---
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+
+  // --- Filters Box ---
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  
+
+  const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
+  const dateText =
+    startDate && endDate
+      ? `${new Date(startDate).toLocaleDateString("en-IN")} to ${new Date(endDate).toLocaleDateString("en-IN")}`
+      : "All Dates";
+  const reimbursableText = reimbursable === "Yes" ? "Yes" : reimbursable === "No" ? "No" : "All";
+
+  autoTable(doc, {
+    startY: 32,
+    head: [["Category", "Date Range", "Reimbursable"]],
+    body: [[categoryText, dateText, reimbursableText]],
+    theme: "grid",
+    styles: { fontSize: 10, halign: "center" },
+    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+  });
+
+  // --- Transactions Table ---
+  const tableColumn = ["Date", "Category", "Comments", "Debit", "Credit", "Reimb.", "Balance"];
+
+  const tableRows = filteredTransactions.map((txn) => {
+    const amount = Number(txn.amount) || 0;
+    const runningBalance = Number(txn.runningBalance) || 0;
+
+    return [
+      new Date(txn.date).toLocaleDateString("en-IN"),
+      txn.category,
+      txn.comments || "-",
+      txn.type === "debit" ? `-${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
+      txn.type === "credit" ? `+${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
+      txn.reimbursable ? "Yes" : "No",
+      runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+    ];
+  });
+
+  let finalY = 50;
+
+  if (tableRows.length === 0) {
+    doc.setFontSize(12);
+    doc.text("No transactions match the selected filters.", 14, finalY);
+  } else {
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 50,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      alternateRowStyles: { fillColor: [240, 240, 240] }, // zebra rows
+      columnStyles: {
+        3: { halign: "right", textColor: [200, 0, 0] }, // debit red
+        4: { halign: "right", textColor: [0, 150, 0] }, // credit green
+        6: { halign: "right", fontStyle: "bold" },       // balance bold
+      },
+    });
+
+    finalY = doc.lastAutoTable.finalY + 10;
+  }
+
+  // --- Summary Section ---
+  const totalDebit = filteredTransactions
+    .filter((t) => t.type === "debit")
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  const totalCredit = filteredTransactions
+    .filter((t) => t.type === "credit")
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  
+
+  const reimbursableCount = filteredTransactions.filter((t) => t.reimbursable).length;
+
+  autoTable(doc, {
+    startY: finalY,
+    head: [["Summary", "Value"]],
+    body: [
+      ["Total Expense", totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
+      ["Total Credit", totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
+      ["Reimbursable Count", reimbursableCount],
+    ],
+    theme: "striped",
+    styles: { fontSize: 11 },
+    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+    columnStyles: {
+      0: { fontStyle: "bold" },
+      1: { halign: "right" },
+    },
+  });
+
+  // --- Save PDF ---
+  doc.save("expense_report.pdf");
+};
+
+
+
+
+
+
+
 
   return (
     <div className="container">
@@ -152,6 +292,12 @@ const ExpenseTracker = ({ setToken }) => {
               onClick={() => navigate("/add-transaction")}
             >
               + Add Transaction
+            </button>
+            <button
+              className="add-btn"
+              onClick={() => setFilterOpen((prev) => !prev)}
+            >
+              {filterOpen ? "Hide Filters" : "Show Filters"}
             </button>
             <div className="user-dropdown-wrapper" ref={dropdownRef}>
               <div
@@ -188,6 +334,57 @@ const ExpenseTracker = ({ setToken }) => {
         </div>
       </div>
 
+      {/* ✅ Filter Section */}
+      {filterOpen && (
+        <div className="date-filter">
+          <label>
+            Category:
+            <select
+              value={selectedCategory}
+              onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Start Date:
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
+              max={endDate || undefined}
+            />
+          </label>
+
+          <label>
+            End Date:
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
+              min={startDate || undefined}
+            />
+          </label>
+
+          <label>
+            Reimbursable:
+            <select
+              value={reimbursable}
+              onChange={(e) => { setReimbursable(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="All">All</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </label>
+
+          <button onClick={resetFilters}>Reset</button>
+        </div>
+      )}
+
       {/* ✅ Summary Section */}
       <div className="summary-section">
         <h2 className="summary-title">Summary</h2>
@@ -211,23 +408,6 @@ const ExpenseTracker = ({ setToken }) => {
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Date Range Filter */}
-      <div className="date-filter" style={{ marginBottom:"1rem", display:"flex", gap:"1rem", alignItems:"center" }}>
-        <label>
-          Start Date:{" "}
-          <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }} max={endDate || undefined}/>
-        </label>
-        <label>
-          End Date:{" "}
-          <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }} min={startDate || undefined}/>
-        </label>
-        {(startDate || endDate) && (
-          <button onClick={() => { setStartDate(""); setEndDate(""); setCurrentPage(1); }} style={{ cursor: "pointer" }}>
-            Clear Dates
-          </button>
-        )}
       </div>
 
       {/* Transactions table */}
@@ -289,10 +469,9 @@ const ExpenseTracker = ({ setToken }) => {
       {/* Footer summary */}
       <div className="footer">
         <div className="footer-actions">
-          <select className="filter-dropdown" value={selectedCategory} onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}>
-            {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
-          </select>
-          <button className="action-btn">Export to Excel</button>
+          <button className="action-btn" onClick={handleExportPDF}>
+            Export PDF
+          </button>
         </div>
       </div>
     </div>
