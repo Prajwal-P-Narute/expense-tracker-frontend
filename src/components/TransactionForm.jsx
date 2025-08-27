@@ -192,6 +192,9 @@ const TransactionForm = () => {
                 <option value="Lending">Lending</option>
                 <option value="Family Support">Family Support</option>
                 <option value="Donation">Donation</option>
+                <option value="Grocery">Grocery</option>
+                <option value="Rent">Rent</option>
+                <option value="Utilities">Utilities</option>
                 <option value="Others">Others</option>
               </select>
               {errors.debitCategory && (
