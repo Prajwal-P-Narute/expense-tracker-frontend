@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
+import { toast } from "react-toastify";
 
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
@@ -132,6 +133,7 @@ const ExpenseTracker = ({ setToken }) => {
     sessionStorage.clear();
     setToken(null);
     navigate("/login");
+    toast.success("Logged out successfully");
   };
 
   const finalBalance =

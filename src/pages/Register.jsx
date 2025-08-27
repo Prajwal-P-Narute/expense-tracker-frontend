@@ -10,6 +10,8 @@ const Register = () => {
     password: "",
     openingBalance: "",
   });
+
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -22,6 +24,8 @@ const Register = () => {
     e.preventDefault();
     setMessage("");
     setError("");
+    setLoading(true); //  disable button
+    toast.info("Registering..."); //  show loading toast
 
     const payload = {
     ...form,
@@ -48,6 +52,8 @@ const Register = () => {
     } catch {
       setError("Network error");
       toast.error("Network error, please try again");
+    }finally {
+      setLoading(false); // ✅ enable button again
     }
   };
 
@@ -104,8 +110,8 @@ const Register = () => {
           {message && <p className="text-success text-center">{message}</p>}
           {error && <p className="text-danger text-center">{error}</p>}
 
-          <button type="submit" className="btn btn-primary w-100 mb-3">
-            Register
+          <button type="submit" className="btn btn-primary w-100 mb-3" disabled={loading}>
+            {loading ? "Registering..." : "Register"}
           </button>
 
           <p className="text-center text-muted">

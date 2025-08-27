@@ -5,6 +5,7 @@ import logo from "../assets/expenseimg.png";
 import { toast } from "react-toastify";
 
 const Login = ({ setToken }) => {
+  const [loading, setLoading] = useState(false);  
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ const Login = ({ setToken }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true); //  disable button
+    
+
 
     try {
       const res = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -45,6 +49,8 @@ const Login = ({ setToken }) => {
     } catch (err) {
       setError("Network error, please try again");
       toast.error("Network error, please try again");
+    }finally {
+      setLoading(false); // ✅ enable button again
     }
   };
 
@@ -87,11 +93,11 @@ const Login = ({ setToken }) => {
             </div>
           )}
 
-          <button className="btn btn-primary w-100 mb-3" type="submit">
-            Login
+          <button className="btn btn-primary w-100 mb-3" type="submit" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
           </button>
 
-          <p className="small mb-3">
+          <p className="small mb-3">  
             <a href="/reset-password" className="text-muted">
               Forgot password?
             </a>
