@@ -103,13 +103,18 @@ const ExpenseTracker = ({ setToken }) => {
     }
 
     return filtered.sort((a, b) => {
-      const dateTimeA = new Date(`${a.date}T${a.time}`);
-      const dateTimeB = new Date(`${b.date}T${b.time}`);
-      if (dateTimeA.getTime() === dateTimeB.getTime()) {
-        return Number(b.id) - Number(a.id);
-      }
-      return dateTimeB - dateTimeA;
-    });
+  const dateA = new Date(a.date);
+  const dateB = new Date(b.date);
+
+  if (dateA.getTime() === dateB.getTime()) {
+    // Same date → newest entry should be first
+    return Number(b.id) - Number(a.id);
+  }
+
+  // Different dates → latest date first
+  return dateB - dateA;
+});
+
   }, [transactions, selectedCategory, reimbursable, startDate, endDate]);
 
   const currentItems = useMemo(() => {
@@ -223,7 +228,7 @@ const handleExportPDF = () => {
   const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
   const dateText =
     startDate && endDate
-      ? `${new Date(startDate).toLocaleDateString("en-IN")} ➝ ${new Date(endDate).toLocaleDateString("en-IN")}`
+      ? `${new Date(startDate).toLocaleDateString("en-IN")} To ${new Date(endDate).toLocaleDateString("en-IN")}`
       : "All Dates";
   const reimbursableText =
     reimbursable === "Yes" ? "Yes" : reimbursable === "No" ? "No" : "All";
