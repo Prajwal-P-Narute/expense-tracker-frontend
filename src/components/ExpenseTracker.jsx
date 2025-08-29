@@ -161,82 +161,22 @@ const ExpenseTracker = ({ setToken }) => {
 
 
   // ✅ Export PDF handler
+// ✅ Export PDF handler
+// ✅ Export PDF handler
 const handleExportPDF = () => {
   const doc = new jsPDF();
 
+  // --- Background ---
+  doc.setFillColor(245, 247, 250); // light gray-blue background
+  doc.rect(0, 0, 210, 297, "F"); // full A4 background
+
   // --- Title Banner ---
-  doc.setFillColor(41, 128, 185); // blue banner
-  doc.rect(0, 0, 210, 20, "F"); // full width rectangle
+  doc.setFillColor(33, 150, 243); // blue banner
+  doc.rect(0, 0, 210, 20, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.text("Expense Report", 105, 13, { align: "center" });
-
-  // --- Report Date ---
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
-
-  // --- Filters Box ---
-  doc.setFontSize(12);
-  doc.setTextColor(0);
-  
-
-  const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
-  const dateText =
-    startDate && endDate
-      ? `${new Date(startDate).toLocaleDateString("en-IN")} to ${new Date(endDate).toLocaleDateString("en-IN")}`
-      : "All Dates";
-  const reimbursableText = reimbursable === "Yes" ? "Yes" : reimbursable === "No" ? "No" : "All";
-
-  autoTable(doc, {
-    startY: 32,
-    head: [["Category", "Date Range", "Reimbursable"]],
-    body: [[categoryText, dateText, reimbursableText]],
-    theme: "grid",
-    styles: { fontSize: 10, halign: "center" },
-    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-  });
-
-  // --- Transactions Table ---
-  const tableColumn = ["Date", "Category", "Comments", "Debit", "Credit", "Reimb.", "Balance"];
-
-  const tableRows = filteredTransactions.map((txn) => {
-    const amount = Number(txn.amount) || 0;
-    const runningBalance = Number(txn.runningBalance) || 0;
-
-    return [
-      new Date(txn.date).toLocaleDateString("en-IN"),
-      txn.category,
-      txn.comments || "-",
-      txn.type === "debit" ? `-${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
-      txn.type === "credit" ? `+${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
-      txn.reimbursable ? "Yes" : "No",
-      runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-    ];
-  });
-
-  let finalY = 50;
-
-  if (tableRows.length === 0) {
-    doc.setFontSize(12);
-    doc.text("No transactions match the selected filters.", 14, finalY);
-  } else {
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 50,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      alternateRowStyles: { fillColor: [240, 240, 240] }, // zebra rows
-      columnStyles: {
-        3: { halign: "right", textColor: [200, 0, 0] }, // debit red
-        4: { halign: "right", textColor: [0, 150, 0] }, // credit green
-        6: { halign: "right", fontStyle: "bold" },       // balance bold
-      },
-    });
-
-    finalY = doc.lastAutoTable.finalY + 10;
-  }
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(" Expense Report", 105, 13, { align: "center" });
 
   // --- Summary Section ---
   const totalDebit = filteredTransactions
@@ -247,35 +187,114 @@ const handleExportPDF = () => {
     .filter((t) => t.type === "credit")
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-  
+  const currentBal =
+    filteredTransactions.length > 0
+      ? filteredTransactions[0].runningBalance
+      : openingBalance;
 
-  const reimbursableCount = filteredTransactions.filter((t) => t.reimbursable).length;
+  doc.setFontSize(14);
+  doc.setTextColor(33, 33, 33);
+  doc.text(" Summary", 14, 28);
 
   autoTable(doc, {
-    startY: finalY,
-    head: [["Summary", "Value"]],
+    startY: 34,
+    head: [["Metric", "Value"]],
     body: [
       ["Total Expense", totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
       ["Total Credit", totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
-      ["Reimbursable Count", reimbursableCount],
+      ["Closing Balance", currentBal.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
     ],
-    theme: "striped",
-    styles: { fontSize: 11 },
-    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+    theme: "grid",
+    styles: { fontSize: 11, valign: "middle" },
+    headStyles: { fillColor: [76, 175, 80], textColor: 255, halign: "center" }, // green header
+    bodyStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [240, 248, 255] }, // light blue
     columnStyles: {
-      0: { fontStyle: "bold" },
-      1: { halign: "right" },
+      0: { halign: "left", fontStyle: "bold", cellWidth: 80 },
+      1: { halign: "right", cellWidth: 60, textColor: [33, 33, 33] },
     },
   });
 
-  // --- Save PDF ---
+  // --- Filters Section ---
+  doc.setFontSize(14);
+  doc.setTextColor(33, 33, 33);
+  doc.text(" Applied Filters", 14, doc.lastAutoTable.finalY + 12);
+
+  const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
+  const dateText =
+    startDate && endDate
+      ? `${new Date(startDate).toLocaleDateString("en-IN")} ➝ ${new Date(endDate).toLocaleDateString("en-IN")}`
+      : "All Dates";
+  const reimbursableText =
+    reimbursable === "Yes" ? "Yes" : reimbursable === "No" ? "No" : "All";
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 18,
+    head: [["Category", "Date Range", "Reimbursable"]],
+    body: [[categoryText, dateText, reimbursableText]],
+    theme: "grid",
+    styles: { fontSize: 10, halign: "center" },
+    headStyles: { fillColor: [255, 152, 0], textColor: 255 }, // orange header
+    bodyStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [255, 243, 224] }, // light orange
+  });
+
+  // --- Transactions Section ---
+  doc.setFontSize(14);
+  doc.setTextColor(33, 33, 33);
+  doc.text(" Transactions", 14, doc.lastAutoTable.finalY + 12);
+
+  const tableColumn = ["Date", "Category", "Comments", "Debit", "Credit", "Reimb.", "Balance"];
+  const tableRows = filteredTransactions.map((txn) => {
+    const amount = Number(txn.amount) || 0;
+    const runningBalance = Number(txn.runningBalance) || 0;
+
+    return [
+      new Date(txn.date).toLocaleDateString("en-IN"),
+      txn.category,
+      txn.comments || "-",
+      txn.type === "debit" ? `${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
+      txn.type === "credit" ? `${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "",
+      txn.reimbursable ? "Yes" : "No",
+      runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+    ];
+  });
+
+  if (tableRows.length === 0) {
+    doc.setFontSize(12);
+    doc.setTextColor(200, 0, 0);
+    doc.text("⚠️ No transactions match the selected filters.", 14, doc.lastAutoTable.finalY + 18);
+  } else {
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: doc.lastAutoTable.finalY + 18,
+      styles: { fontSize: 9, valign: "middle" },
+      headStyles: { fillColor: [63, 81, 181], textColor: 255, halign: "center" }, // Indigo header
+      alternateRowStyles: { fillColor: [232, 234, 246] }, // light indigo
+      bodyStyles: { textColor: [33, 33, 33] },
+      columnStyles: {
+        0: { halign: "center" }, // Date
+        1: { halign: "center" }, // Category
+        2: { halign: "left" },   // Comments
+        3: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" }, // Debit red
+        4: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" }, // Credit green
+        5: { halign: "center" }, // Reimb.
+        6: { halign: "right", fontStyle: "bold" }, // Balance
+      },
+    });
+  }
+
+  // --- Report Date (bottom-right corner) ---
+  const pageHeight = doc.internal.pageSize.height;
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  doc.text(` Report Date: ${new Date().toLocaleString()}`, 200, pageHeight - 10, {
+    align: "right",
+  });
+
   doc.save("expense_report.pdf");
 };
-
-
-
-
-
 
 
 
