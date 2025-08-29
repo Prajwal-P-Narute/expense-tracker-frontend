@@ -575,12 +575,26 @@
 
   /* Buttons stack full width */
   .button-group {
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
     width: 100%;
+    gap: 8px;
   }
 
-  .add-btn,
-  .logout-btn,
+  /* Add Transaction + Show Filter take half width each */
+  .add-btn {
+    flex: 1;
+    font-size: 0.85rem;
+    padding: 10px;
+  }
+
+  /* Logout button stays full width */
+  .logout-btn {
+    width: 100%;
+    margin-top: 8px;
+    font-size: 0.85rem;
+  }
+
   .filter-dropdown,
   .action-btn {
     width: 100%;
@@ -596,16 +610,19 @@
   }
 
   /* Pagination cleanup */
-  .pagination {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+.pagination {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 8px;
+}
 
-  .pagination span {
-    font-size: 0.8rem;
-    flex-basis: 100%;
-    text-align: center;
-  }
+.pagination span {
+  font-size: 0.8rem;
+  flex-grow: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
 }
 
 

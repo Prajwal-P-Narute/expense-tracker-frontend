@@ -311,9 +311,25 @@ const TransactionForm = () => {
           ></textarea>
         </div>
 
-        <button type="submit" className="submit-btn" disabled={submitting}>
-          {submitting ? "Submitting..." : "Add Transaction"}
-        </button>
+        <button
+  type="submit"
+  className="submit-btn d-flex align-items-center justify-content-center"
+  disabled={submitting}
+>
+  {submitting ? (
+    <>
+      <span
+        className="spinner-border spinner-border-sm me-2"
+        role="status"
+        aria-hidden="true"
+      ></span>
+      Please wait...
+    </>
+  ) : (
+    "Add Transaction"
+  )}
+</button>
+
       </form>
     </div>
   );

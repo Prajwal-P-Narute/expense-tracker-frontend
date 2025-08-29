@@ -94,7 +94,18 @@ const Login = ({ setToken }) => {
           )}
 
           <button className="btn btn-primary w-100 mb-3" type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
+            {loading ? (
+    <>
+      <span
+        className="spinner-border spinner-border-sm me-2"
+        role="status"
+        aria-hidden="true"
+      ></span>
+      Please wait...
+    </>
+  ) : (
+    "Login"
+  )}
           </button>
 
           <p className="small mb-3">  
