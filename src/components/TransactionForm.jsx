@@ -195,6 +195,7 @@ const TransactionForm = () => {
                 <option value="Grocery">Grocery</option>
                 <option value="Rent">Rent</option>
                 <option value="Utilities">Utilities</option>
+                <option value="EMI">EMI</option>
                 <option value="Others">Others</option>
               </select>
               {errors.debitCategory && (
