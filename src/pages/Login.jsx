@@ -32,14 +32,13 @@ const Login = ({ setToken }) => {
       const res = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(form),
       });
 
       if (res.ok) {
-        const token = await res.text();
-        localStorage.setItem("token", token);
-        setToken(token);
+        const data = await res.json();
+        localStorage.setItem("token", data.token);
+        setToken(data.token);
         navigate("/expense-tracker");
         toast.success("Login successful! Redirecting...");
       } else {
