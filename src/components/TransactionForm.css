@@ -262,6 +262,35 @@ input:focus, select:focus, textarea:focus {
   align-items: center; /* vertically center */
 }
 
+.labels-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.label-chip input {
+  display: none; /* hide default checkbox */
+}
+
+.label-chip.selected {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+
 
 
 

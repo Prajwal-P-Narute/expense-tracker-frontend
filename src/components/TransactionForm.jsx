@@ -1,34 +1,98 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./TransactionForm.css";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 import { toast } from "react-toastify";
+import { fetchCategories } from "../utils/categoryApi";
+import { fetchLabels } from "../utils/labelApi";
 
 const TransactionForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const editingTransaction = location.state?.transaction || null;
+  const isEditMode = !!editingTransaction;
 
-  // Get today's date in yyyy-MM-dd format
+  const [allCategories, setAllCategories] = useState([]); // [{id,name,type}]
+  const [allLabels, setAllLabels] = useState([]); // [{id,name,color}]
+  const [selectedLabelIds, setSelectedLabelIds] = useState(
+    editingTransaction?.labelIds || []
+  );
+
+  const debitCats = allCategories.filter((c) => c.type === "debit");
+  const creditCats = allCategories.filter((c) => c.type === "credit");
+
+  // Load categories
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchCategories();
+        setAllCategories(data);
+      } catch {
+        toast.error("Failed to load categories");
+      }
+    })();
+  }, []);
+
+  // Load labels
+  useEffect(() => {
+    (async () => {
+      try {
+        const ls = await fetchLabels();
+        setAllLabels(ls);
+      } catch {
+        // Labels optional
+      }
+    })();
+  }, []);
+
+  // Get today's date
   const getTodayDate = () => {
     const today = new Date();
     today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
     return today.toISOString().split("T")[0];
   };
 
-  const [formData, setFormData] = useState({
-    date: getTodayDate(),
-    debitCategory: "",
-    creditCategory: "",
-    debitAmount: "",
-    creditAmount: "",
-    reimbursable: "N",
-    comments: "",
+  const [formData, setFormData] = useState(() => {
+    if (editingTransaction) {
+      return {
+        date: editingTransaction.date.split("T")[0],
+        debitCategory:
+          editingTransaction.type === "debit"
+            ? editingTransaction.category
+            : "",
+        creditCategory:
+          editingTransaction.type === "credit"
+            ? editingTransaction.category
+            : "",
+        debitAmount:
+          editingTransaction.type === "debit" ? editingTransaction.amount : "",
+        creditAmount:
+          editingTransaction.type === "credit" ? editingTransaction.amount : "",
+        reimbursable:
+          editingTransaction.type === "debit"
+            ? editingTransaction.reimbursable
+              ? "Y"
+              : "N"
+            : "N",
+        comments: editingTransaction.comments || "",
+      };
+    }
+    return {
+      date: getTodayDate(),
+      debitCategory: "",
+      creditCategory: "",
+      debitAmount: "",
+      creditAmount: "",
+      reimbursable: "N",
+      comments: "",
+    };
   });
 
-  const [type, setType] = useState("debit");
+  const [type, setType] = useState(
+    editingTransaction ? editingTransaction.type : "debit"
+  );
   const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false); // Prevent double-submit
-  // const token = localStorage.getItem("token");
-
+  const [submitting, setSubmitting] = useState(false);
 
   const handleTypeToggle = (selectedType) => {
     setType(selectedType);
@@ -46,6 +110,15 @@ const TransactionForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onLabelsChange = (id) => {
+    setSelectedLabelIds(
+      (prev) =>
+        prev.includes(id)
+          ? prev.filter((labelId) => labelId !== id) // uncheck
+          : [...prev, id] // check
+    );
   };
 
   const validate = () => {
@@ -70,19 +143,6 @@ const TransactionForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const resetForm = () => {
-    setFormData({
-      date: getTodayDate(),
-      debitCategory: "",
-      creditCategory: "",
-      debitAmount: "",
-      creditAmount: "",
-      reimbursable: type === "debit" ? "N" : "",
-      comments: "",
-    });
-    setErrors({});
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -97,31 +157,36 @@ const TransactionForm = () => {
       amount: type === "debit" ? formData.debitAmount : formData.creditAmount,
       reimbursable: type === "debit" ? formData.reimbursable : "N",
       comments: formData.comments,
+      labelIds: selectedLabelIds, // <-- multiple or none
     };
 
     try {
-      const res = await fetch(`${BASE_URL}/api/transactions`, {
-        method: "POST",
+      const url = isEditMode
+        ? `${BASE_URL}/api/transactions/${editingTransaction.id}`
+        : `${BASE_URL}/api/transactions`;
+
+      const method = isEditMode ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
-          
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        credentials: "include", // ✅ Send cookie
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Failed to submit transaction");
 
-      toast.success("Transaction added successfully!");
-      resetForm();
-
-      // Optional delay before navigating
-      setTimeout(() => {
-        navigate("/");
-      }, 500);
+      toast.success(
+        isEditMode
+          ? "Transaction updated successfully!"
+          : "Transaction added successfully!"
+      );
+      navigate("/expense-tracker", { state: { refresh: true } });
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Something went wrong. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -130,13 +195,17 @@ const TransactionForm = () => {
   return (
     <div className="container">
       <div className="header">
-        <h1>Add New Transaction</h1>
-        <button className="back-btn" onClick={() => navigate("/")}>
+        <h1>{isEditMode ? "Edit Transaction" : "Add New Transaction"}</h1>
+        <button
+          className="back-btn"
+          onClick={() => navigate("/expense-tracker")}
+        >
           ← Back to List
         </button>
       </div>
 
       <form onSubmit={handleSubmit}>
+        {/* Date */}
         <div className="form-group">
           <label htmlFor="date" className="required">
             Date
@@ -151,6 +220,7 @@ const TransactionForm = () => {
           {errors.date && <div className="error-message">{errors.date}</div>}
         </div>
 
+        {/* Type toggle */}
         <div className="transaction-type">
           <button
             type="button"
@@ -168,10 +238,11 @@ const TransactionForm = () => {
             }`}
             onClick={() => handleTypeToggle("credit")}
           >
-            Credit  
+            Credit
           </button>
         </div>
 
+        {/* Debit section */}
         {type === "debit" && (
           <div id="debitSection">
             <div className="form-group">
@@ -183,21 +254,20 @@ const TransactionForm = () => {
                 name="debitCategory"
                 value={formData.debitCategory}
                 onChange={handleChange}
+                disabled={allCategories.length === 0}
               >
-                <option value="">-- Select Category --</option>
-                <option value="Food">Food</option>
-                <option value="Transport">Transport</option>
-                <option value="Accommodation">Accommodation</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Lending">Lending</option>
-                <option value="Family Support">Family Support</option>
-                <option value="Donation">Donation</option>
-                <option value="Grocery">Grocery</option>
-                <option value="Rent">Rent</option>
-                <option value="Utilities">Utilities</option>
-                <option value="EMI">EMI</option>
-                <option value="Others">Others</option>
+                <option value="">
+                  {allCategories.length === 0
+                    ? "Loading categories..."
+                    : "-- Select Category --"}
+                </option>
+                {debitCats.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
+
               {errors.debitCategory && (
                 <div className="error-message">{errors.debitCategory}</div>
               )}
@@ -255,6 +325,7 @@ const TransactionForm = () => {
           </div>
         )}
 
+        {/* Credit section */}
         {type === "credit" && (
           <div id="creditSection">
             <div className="form-group">
@@ -266,14 +337,20 @@ const TransactionForm = () => {
                 name="creditCategory"
                 value={formData.creditCategory}
                 onChange={handleChange}
+                disabled={allCategories.length === 0}
               >
-                <option value="">-- Select Category --</option>
-                <option value="Salary">Salary</option>
-                <option value="Refund">Refund</option>
-                <option value="Investment">Investment</option>
-                <option value="Gift">Gift</option>
-                <option value="Other Income">Other Income</option>
+                <option value="">
+                  {allCategories.length === 0
+                    ? "Loading categories..."
+                    : "-- Select Category --"}
+                </option>
+                {creditCats.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
+
               {errors.creditCategory && (
                 <div className="error-message">{errors.creditCategory}</div>
               )}
@@ -300,6 +377,7 @@ const TransactionForm = () => {
           </div>
         )}
 
+        {/* Comments */}
         <div className="form-group">
           <label htmlFor="comments">Comments</label>
           <textarea
@@ -312,25 +390,50 @@ const TransactionForm = () => {
           ></textarea>
         </div>
 
-        <button
-  type="submit"
-  className="submit-btn d-flex align-items-center justify-content-center"
-  disabled={submitting}
->
-  {submitting ? (
-    <>
-      <span
-        className="spinner-border spinner-border-sm me-2"
-        role="status"
-        aria-hidden="true"
-      ></span>
-      Please wait...
-    </>
-  ) : (
-    "Add Transaction"
-  )}
-</button>
+        {/* Labels */}
+        <div className="form-group">
+          <label>Labels (optional)</label>
+  <div className="labels-group">
+    {allLabels.map((l) => (
+      <label
+        key={l.id}
+        className={`label-chip ${
+          selectedLabelIds.includes(l.id) ? "selected" : ""
+        }`}
+      >
+        <input
+          type="checkbox"
+          value={l.id}
+          checked={selectedLabelIds.includes(l.id)}
+          onChange={() => onLabelsChange(l.id)}
+        />
+        {l.name}
+      </label>
+    ))}
+  </div>
+        </div>
 
+        {/* Submit */}
+        <button
+          type="submit"
+          className="submit-btn d-flex align-items-center justify-content-center"
+          disabled={submitting}
+        >
+          {submitting ? (
+            <>
+              <span
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+                aria-hidden="true"
+              ></span>
+              Please wait...
+            </>
+          ) : isEditMode ? (
+            "Update Transaction"
+          ) : (
+            "Add Transaction"
+          )}
+        </button>
       </form>
     </div>
   );
