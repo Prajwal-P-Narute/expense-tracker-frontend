@@ -41,6 +41,8 @@ export default function ManageLabel() {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState(colorOptions[0]);
   const [transferTo, setTransferTo] = useState("");
+  const [cancelDeleteModal, setCancelDeleteModal] = useState(false);
+
 
   const reload = async () => {
     try {
@@ -98,6 +100,10 @@ export default function ManageLabel() {
 
   // Open delete modal
   const openDeleteModal = (label) => {
+    if (labels.length <= 1) {
+    setCancelDeleteModal(true); 
+    return;
+  }
     setSelectedLabel(label);
     setTransferTo("");
     setDeleteModal(true);
@@ -112,11 +118,14 @@ export default function ManageLabel() {
       return;
     }
     try {
-      await deleteLabel(selectedLabel.id, usedCount > 0 ? transferTo : undefined);
-setDeleteModal(false);
-setTransferTo("");
-await reload(); // existing
-window.dispatchEvent(new Event("labelsUpdated")); // 🔥 new
+      await deleteLabel(
+        selectedLabel.id,
+        usedCount > 0 ? transferTo : undefined
+      );
+      setDeleteModal(false);
+      setTransferTo("");
+      await reload(); // existing
+      window.dispatchEvent(new Event("labelsUpdated")); // 🔥 new
 
       toast.success("Label deleted");
     } catch (err) {
@@ -166,13 +175,19 @@ window.dispatchEvent(new Event("labelsUpdated")); // 🔥 new
         {/* Labels List */}
         <ul className="labels-list">
           {labels.map((label) => (
-            <li className="label-item" key={label.id}>
+            <li
+              className={`label-item ${label.isDefault ? "default-label" : ""}`}
+              key={label.id}
+            >
               <div className="label-info">
                 <div
                   className="label-color"
                   style={{ backgroundColor: label.color || "#6c5ce7" }}
                 />
                 <span className="label-name">{label.name}</span>
+                {label.isDefault && (
+                  <span className="default-badge">Default</span>
+                )}
                 <span className="label-usage">
                   Used in {usageMap[label.id] || 0} transactions
                 </span>
@@ -200,122 +215,155 @@ window.dispatchEvent(new Event("labelsUpdated")); // 🔥 new
 
       {/* Edit Label Modal */}
       {/* Edit Label Modal */}
-{editModal && (
-  <div
-    className="edit-modal"
-    onClick={(e) =>
-      e.target.classList.contains("edit-modal") && setEditModal(false)
-    }
-  >
-    <div className="edit-modal-content">
-      <div className="modal-header">
-        <h3>Edit Label</h3>
-        <button className="close-btn" onClick={() => setEditModal(false)}>
-          <FaTimes />
-        </button>
-      </div>
-      <form onSubmit={handleEditSave}>
-        <div className="form-group">
-          <label>Label Name</label>
-          <input
-            type="text"
-            className="form-control"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label>Label Color</label>
-          <div className="color-picker">
-            {colorOptions.map((color) => (
-              <div
-                key={color}
-                className={`color-option ${
-                  editColor === color ? "selected" : ""
-                }`}
-                style={{ backgroundColor: color }}
-                onClick={() => setEditColor(color)}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setEditModal(false)}
-          >
-            <FaTimes /> Cancel
-          </button>
-          <button type="submit" className="btn btn-primary">
-            <FaSave /> Save Changes
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-
-{/* Delete Label Modal */}
-{deleteModal && (
-  <div
-    className="delete-modal"
-    onClick={(e) =>
-      e.target.classList.contains("delete-modal") && setDeleteModal(false)
-    }
-  >
-    <div className="delete-modal-content">
-      <div className="modal-header">
-        <h3>Delete Label</h3>
-        <button
-          className="close-btn"
-          onClick={() => setDeleteModal(false)}
+      {editModal && (
+        <div
+          className="edit-modal"
+          onClick={(e) =>
+            e.target.classList.contains("edit-modal") && setEditModal(false)
+          }
         >
-          <FaTimes />
-        </button>
-      </div>
-      {(usageMap[selectedLabel?.id] || 0) > 0 && (
-        <div className="transaction-warning">
-          <FaExclamationTriangle />
-          <p>
-            This label is used in transactions. Please select a new label
-            to reassign those transactions before deleting.
-          </p>
+          <div className="edit-modal-content">
+            <div className="modal-header">
+              <h3>Edit Label</h3>
+              <button className="close-btn" onClick={() => setEditModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <form onSubmit={handleEditSave}>
+              <div className="form-group">
+                <label>Label Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Label Color</label>
+                <div className="color-picker">
+                  {colorOptions.map((color) => (
+                    <div
+                      key={color}
+                      className={`color-option ${
+                        editColor === color ? "selected" : ""
+                      }`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setEditColor(color)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditModal(false)}
+                >
+                  <FaTimes /> Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <FaSave /> Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
-      <form onSubmit={handleDelete}>
-        {(usageMap[selectedLabel?.id] || 0) > 0 && (
-          <div className="form-group">
-            <label>Reassign transactions to</label>
-            <select
-              className="form-control"
-              value={transferTo}
-              onChange={(e) => setTransferTo(e.target.value)}
-            >
-              <option value="">Select a label</option>
-              {labels
-                .filter((lbl) => lbl.id !== selectedLabel?.id)
-                .map((lbl) => (
-                  <option key={lbl.id} value={lbl.id}>
-                    {lbl.name}
-                  </option>
-                ))}
-            </select>
+
+      {/* Delete Label Modal */}
+      {deleteModal && (
+        <div
+          className="delete-modal"
+          onClick={(e) =>
+            e.target.classList.contains("delete-modal") && setDeleteModal(false)
+          }
+        >
+          <div className="delete-modal-content">
+            <div className="modal-header">
+              <h3>Delete Label</h3>
+              <button
+                className="close-btn"
+                onClick={() => setDeleteModal(false)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            {(usageMap[selectedLabel?.id] || 0) > 0 && (
+              <div className="transaction-warning">
+                <FaExclamationTriangle />
+                <p>
+                  This label is used in transactions. Please select a new label
+                  to reassign those transactions before deleting.
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleDelete}>
+              {(usageMap[selectedLabel?.id] || 0) > 0 && (
+                <div className="form-group">
+                  <label>Reassign transactions to</label>
+                  <select
+                    className="form-control"
+                    value={transferTo}
+                    onChange={(e) => setTransferTo(e.target.value)}
+                  >
+                    <option value="">Select a label</option>
+                    {labels
+                      .filter((lbl) => lbl.id !== selectedLabel?.id)
+                      .map((lbl) => (
+                        <option key={lbl.id} value={lbl.id}>
+                          {lbl.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setDeleteModal(false)}
+                >
+                  <FaTimes /> Cancel
+                </button>
+                <button type="submit" className="btn btn-danger">
+                  <FaTrash /> Delete Label
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setDeleteModal(false)}
-          >
-            <FaTimes /> Cancel
-          </button>
-          <button type="submit" className="btn btn-danger">
-            <FaTrash /> Delete Label
-          </button>
         </div>
-      </form>
+      )}
+
+      {/* Cancel Delete Modal */}
+{cancelDeleteModal && (
+  <div
+    className="cancel-delete-modal"
+    onClick={(e) =>
+      e.target.classList.contains("cancel-delete-modal") &&
+      setCancelDeleteModal(false)
+    }
+  >
+    <div className="cancel-delete-modal-content">
+      <div className="modal-header">
+        <h3>Delete Not Allowed</h3>
+        <button className="close-btn" onClick={() => setCancelDeleteModal(false)}>
+          <FaTimes />
+        </button>
+      </div>
+      <div className="modal-body">
+        <FaExclamationTriangle className="warning-icon" />
+        <p>You must keep at least one label. The last label cannot be deleted.</p>
+      </div>
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setCancelDeleteModal(false)}
+        >
+          <FaTimes /> Close
+        </button>
+      </div>
     </div>
   </div>
 )}

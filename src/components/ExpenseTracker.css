@@ -69,17 +69,21 @@ body {
 .button-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex: 1 1 auto;
-  min-width: 0;
+  
   flex-wrap: wrap; /* key: allow items to wrap */
+  justify-content: flex-end;
 }
 
 .add-btn {
   background-color: var(--primary-color);
+  flex: 1 1 auto;
+  min-width: 100px;
+  max-width: 160px;
   color: #fff;
   border: none;
-  padding: 10px 16px;
+  padding: 6px 16px;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
@@ -89,7 +93,7 @@ body {
   align-items: center;
   gap: 6px;
   white-space: nowrap; /* avoid text wrapping inside button */
-  flex: 0 1 160px; /* give a reasonable preferred width */
+  
 }
 
 .add-btn:hover {
@@ -641,3 +645,32 @@ tr:hover {
     min-width: 55px;
   }
 }
+
+/* Fix for very small screens like Galaxy S8+ (360px width) */
+@media (max-width: 400px) {
+  .button-group {
+    flex-direction: row;       /* keep buttons in a row */
+    flex-wrap: nowrap;         /* prevent wrapping */
+    gap: 6px;                  /* reduce gap between buttons */
+  }
+
+  .add-btn {
+    flex: 1;                   /* let it shrink/grow within row */
+    padding: 8px 10px;         /* tighter padding */
+    font-size: 13px;           /* slightly smaller text */
+    min-width: 0;              /* allow flexbox to shrink */
+  }
+
+  .button-group button {
+    flex: 1;                   /* make all buttons flexible */
+    padding: 8px 10px;
+    font-size: 13px;
+    min-width: 0;
+  }
+
+  .header {
+    gap: 8px;
+    padding: 8px;
+  }
+}
+
