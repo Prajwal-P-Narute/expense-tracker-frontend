@@ -14,6 +14,7 @@ import autoTable from "jspdf-autotable";
 import DeleteModal from "./DeleteModal";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
+import { fetchTransactions, deleteTransaction } from "../utils/transactionApi";
 
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
@@ -21,32 +22,24 @@ const ExpenseTracker = ({ setToken }) => {
 
   const [transactions, setTransactions] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [reimbursable, setReimbursable] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const avatarBtnRef = useRef(null);
   const pageSize = 15;
-
   const [openingBalance, setOpeningBalance] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
-
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
   const [filterOpen, setFilterOpen] = useState(false);
-  // state for modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [categoryOptions, setCategoryOptions] = useState(["All"]);
-
-  const [labelMap, setLabelMap] = useState({}); // id -> {name,color}
+  const [labelMap, setLabelMap] = useState({});
   const [selectedLabel, setSelectedLabel] = useState("All");
   const [labelOptions, setLabelOptions] = useState(["All"]);
-
   const token = localStorage.getItem("token");
-
   // close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event) {
@@ -58,58 +51,14 @@ const ExpenseTracker = ({ setToken }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Add above the effect
-  const fallbackFromTx = useMemo(() => {
-    const unique = new Set(transactions.map((t) => t.category));
-    return ["All", ...Array.from(unique)];
-  }, [transactions]); // safe and correct
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cats = await fetchCategories();
-        if (cancelled) return;
-        const names = Array.from(new Set(cats.map((c) => c.name)));
-        setCategoryOptions(["All", ...names]);
-        setSelectedCategory((prev) =>
-          prev !== "All" && !names.includes(prev) ? "All" : prev
-        );
-      } catch {
-        if (cancelled) return;
-        // Use the memoized fallback so deps can be precise
-        setCategoryOptions(fallbackFromTx);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fallbackFromTx, location.key]);
-
-  // load labels on mount or location change similar to categories
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const ls = await fetchLabels();
-        if (cancelled) return;
-        setLabelMap(
-          Object.fromEntries(
-            ls.map((l) => [l.id, { name: l.name, color: l.color }])
-          )
-        );
-        setLabelOptions(["All", ...ls.map((l) => l.id)]);
-        setSelectedLabel((prev) =>
-          prev !== "All" && !ls.some((l) => l.id === prev) ? "All" : prev
-        );
-      } catch {
-        // keep empty; labels optional
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [location.key]);
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    // Handles date strings like "2025-09-20"
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return dateString;
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  };
 
   // ✅ Centralized fetch helper
   const refreshTransactions = useCallback(async () => {
@@ -118,25 +67,17 @@ const ExpenseTracker = ({ setToken }) => {
         fetch(`${BASE_URL}/api/transactions/opening-balance`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((res) => res.json()),
-
-        fetch(`${BASE_URL}/api/transactions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((res) => {
-          if (res.status === 401) {
-            localStorage.removeItem("token");
-            navigate("/login");
-            return null;
-          }
-          return res.json();
-        }),
+        fetchTransactions(),
       ]);
-
-      if (!data) return;
       setOpeningBalance(openingBal);
       setTransactions(data);
       setCurrentPage(1);
     } catch (err) {
-      console.error("Failed to load data", err);
+      if (String(err).includes("401")) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
+      toast.error("Failed to load transactions.");
     }
   }, [token, navigate]);
 
@@ -145,77 +86,73 @@ const ExpenseTracker = ({ setToken }) => {
       navigate("/login");
       return;
     }
-
     if (location.state?.refresh) {
-      navigate(location.pathname, { replace: true, state: {} }); // clear refresh flag
+      navigate(location.pathname, { replace: true, state: {} });
     }
-
     refreshTransactions();
   }, [location, navigate, token, refreshTransactions]);
 
+  useEffect(() => {
+    // Fetch categories and labels
+    const loadSupportingData = async () => {
+      try {
+        const [cats, labels] = await Promise.all([
+          fetchCategories(),
+          fetchLabels(),
+        ]);
+        const catNames = Array.from(new Set(cats.map((c) => c.name)));
+        setCategoryOptions(["All", ...catNames]);
+
+        setLabelMap(
+          Object.fromEntries(
+            labels.map((l) => [l.id, { name: l.name, color: l.color }])
+          )
+        );
+        setLabelOptions(["All", ...labels.map((l) => l.id)]);
+      } catch (error) {
+        toast.error("Failed to load categories or labels.");
+      }
+    };
+    loadSupportingData();
+  }, [location.key]);
+
   const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
-
     if (selectedCategory !== "All") {
       filtered = filtered.filter((t) => t.category === selectedCategory);
     }
-
-    if (reimbursable !== "All") {
-      const flag = reimbursable === "Yes";
-      filtered = filtered.filter((t) => t.reimbursable === flag);
-    }
-
     if (startDate) {
-      const start = new Date(startDate);
-      filtered = filtered.filter((t) => new Date(t.date) >= start);
+      filtered = filtered.filter(
+        (t) => new Date(t.date) >= new Date(startDate)
+      );
     }
-
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       filtered = filtered.filter((t) => new Date(t.date) <= end);
     }
-
     if (selectedLabel !== "All") {
       filtered = filtered.filter(
         (t) => Array.isArray(t.labelIds) && t.labelIds.includes(selectedLabel)
       );
     }
-
-    // This sorting logic is correct and will now work as expected on the copied array.
-    return filtered.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-  
-        // Primary sort: by date, descending (most recent date first)
-        if (dateA.getTime() !== dateB.getTime()) {
-          return dateB.getTime() - dateA.getTime();
-        }
-  
-        // Secondary sort: by ID, descending (newer item first).
-        return Number(b.id) - Number(a.id);
-      });
-  }, [
-    transactions,
-    selectedCategory,
-    reimbursable,
-    startDate,
-    endDate,
-    selectedLabel,
-  ]);
+    return filtered; // Data is already sorted by the API
+  }, [transactions, selectedCategory, startDate, endDate, selectedLabel]);
 
   const currentItems = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTransactions.slice(start, start + pageSize);
-  }, [filteredTransactions, currentPage]);
+  }, [filteredTransactions, currentPage, pageSize]);
 
   useEffect(() => {
-    let income = 0;
-    let expense = 0;
-    filteredTransactions.forEach((tx) => {
-      if (tx.type === "credit") income += Number(tx.amount);
-      else if (tx.type === "debit") expense += Number(tx.amount);
-    });
+    const { income, expense } = filteredTransactions.reduce(
+      (acc, tx) => {
+        if (tx.type === "credit") acc.income += tx.amount;
+        if (tx.type === "debit") acc.expense += tx.amount;
+        return acc;
+      },
+      { income: 0, expense: 0 }
+    );
     setTotalIncome(income);
     setTotalExpense(expense);
   }, [filteredTransactions]);
@@ -251,31 +188,18 @@ const ExpenseTracker = ({ setToken }) => {
     toast.success("Logged out successfully");
   };
 
-  const confirmDelete = (id) => {
-    setTransactionToDelete(id);
-    setShowDeleteModal(true);
-  };
+  // const confirmDelete = (id) => {
+  //   setTransactionToDelete(id);
+  //   setShowDeleteModal(true);
+  // };
 
   const handleConfirmDelete = async () => {
     if (!transactionToDelete) return;
-
     try {
-      const res = await fetch(
-        `${BASE_URL}/api/transactions/${transactionToDelete}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (res.status === 204) {
-        await refreshTransactions();
-        toast.success("Transaction deleted successfully");
-      } else {
-        toast.error("Failed to delete transaction");
-      }
+      await deleteTransaction(transactionToDelete);
+      toast.success("Transaction deleted successfully");
+      await refreshTransactions();
     } catch (err) {
-      console.error("Delete failed", err);
       toast.error("Error deleting transaction");
     } finally {
       setShowDeleteModal(false);
@@ -290,7 +214,6 @@ const ExpenseTracker = ({ setToken }) => {
 
   const resetFilters = () => {
     setSelectedCategory("All");
-    setReimbursable("All");
     setStartDate("");
     setEndDate("");
     setSelectedLabel("All");
@@ -372,17 +295,13 @@ const ExpenseTracker = ({ setToken }) => {
     const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
     const dateText =
       startDate && endDate
-        ? `${new Date(startDate).toLocaleDateString("en-IN")} To ${new Date(
-            endDate
-          ).toLocaleDateString("en-IN")}`
+        ? `${formatDate(startDate)} To ${formatDate(endDate)}`
         : "All Dates";
-    const reimbursableText =
-      reimbursable === "Yes" ? "Yes" : reimbursable === "No" ? "No" : "All";
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 18,
-      head: [["Category", "Date Range", "Reimbursable"]],
-      body: [[categoryText, dateText, reimbursableText]],
+      head: [["Category", "Date Range"]],
+      body: [[categoryText, dateText]],
       theme: "grid",
       styles: { fontSize: 10, halign: "center" },
       headStyles: { fillColor: [255, 152, 0], textColor: 255 }, // orange header
@@ -402,7 +321,6 @@ const ExpenseTracker = ({ setToken }) => {
       "Labels",
       "Debit",
       "Credit",
-      "Reimb.",
       "Balance",
     ];
     const tableRows = filteredTransactions.map((txn) => {
@@ -415,7 +333,7 @@ const ExpenseTracker = ({ setToken }) => {
             .join(", ")
         : "-";
       return [
-        new Date(txn.date).toLocaleDateString("en-IN"),
+        formatDate(txn.date),
         txn.category,
         txn.comments || "-",
         labelNames,
@@ -425,7 +343,6 @@ const ExpenseTracker = ({ setToken }) => {
         txn.type === "credit"
           ? amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })
           : "",
-        txn.reimbursable ? "Yes" : "No",
         runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
       ];
     });
@@ -458,8 +375,7 @@ const ExpenseTracker = ({ setToken }) => {
           3: { halign: "left" }, // Labels
           4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" }, // Debit red
           5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" }, // Credit green
-          6: { halign: "center" }, // Reimb.
-          7: { halign: "right", fontStyle: "bold" }, // Balance
+          6: { halign: "right", fontStyle: "bold" }, // Balance
         },
       });
     }
@@ -615,21 +531,6 @@ const ExpenseTracker = ({ setToken }) => {
             </label>
 
             <label>
-              Reimbursable:
-              <select
-                value={reimbursable}
-                onChange={(e) => {
-                  setReimbursable(e.target.value);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="All">All</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </label>
-
-            <label>
               Label:
               <select
                 value={selectedLabel}
@@ -702,19 +603,18 @@ const ExpenseTracker = ({ setToken }) => {
                 <th>Label</th>
                 <th>Debit Amount</th>
                 <th>Credit Amount</th>
-                {/* <th>Reimbursable (Y/N)</th> */}
                 <th>Balance</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {currentItems.length > 0 ? (
-                currentItems.map((entry, index) => (
-                  <tr key={entry.id || index}>
-                    <td>{new Date(entry.date).toLocaleDateString()}</td>
+                currentItems.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{formatDate(entry.date)}</td>
+
                     <td>{entry.category}</td>
                     <td>{entry.comments || "-"}</td>
-
                     <td>
                       {Array.isArray(entry.labelIds) &&
                       entry.labelIds.length > 0 ? (
@@ -723,16 +623,13 @@ const ExpenseTracker = ({ setToken }) => {
                             key={lid}
                             className="label-badge"
                             style={{
-                              backgroundColor:
-                                (labelMap[lid]?.color || "#6c5ce7") + "22",
+                              backgroundColor: `${
+                                labelMap[lid]?.color || "#6c5ce7"
+                              }22`,
                               color: labelMap[lid]?.color || "#6c5ce7",
                               border: `1px solid ${
                                 labelMap[lid]?.color || "#6c5ce7"
                               }`,
-                              padding: "2px 8px",
-                              borderRadius: "12px",
-                              marginRight: "4px",
-                              display: "inline-block",
                             }}
                           >
                             {labelMap[lid]?.name || "Label"}
@@ -742,8 +639,9 @@ const ExpenseTracker = ({ setToken }) => {
                         <span>-</span>
                       )}
                     </td>
-
-                    <td className={entry.type === "debit" ? "debit-amount" : ""}>
+                    <td
+                      className={entry.type === "debit" ? "debit-amount" : ""}
+                    >
                       {entry.type === "debit" ? (
                         <strong>
                           {Number(entry.amount).toLocaleString("en-IN", {
@@ -767,13 +665,6 @@ const ExpenseTracker = ({ setToken }) => {
                         "-"
                       )}
                     </td>
-                    {/* <td
-                      className={
-                        entry.reimbursable ? "reimbursable-Y" : "reimbursable-N"
-                      }
-                    >
-                      {entry.reimbursable ? "Y" : "N"}
-                    </td> */}
                     <td
                       className={
                         entry.runningBalance < 0
@@ -791,7 +682,10 @@ const ExpenseTracker = ({ setToken }) => {
                         title="Edit"
                         onClick={() =>
                           navigate("/edit-transaction", {
-                            state: { transaction: entry },
+                            state: {
+                              transaction: entry,
+                              isContactTransaction: !!entry.contactId,
+                            },
                           })
                         }
                       >
@@ -800,7 +694,10 @@ const ExpenseTracker = ({ setToken }) => {
                       <span
                         className="action-icon delete"
                         title="Delete"
-                        onClick={() => confirmDelete(entry.id)}
+                        onClick={() => {
+                          setTransactionToDelete(entry.id);
+                          setShowDeleteModal(true);
+                        }}
                       >
                         <i className="fas fa-trash" />
                       </span>
@@ -810,7 +707,7 @@ const ExpenseTracker = ({ setToken }) => {
               ) : (
                 <tr>
                   <td
-                    colSpan="9"
+                    colSpan="8"
                     style={{ textAlign: "center", padding: "1rem" }}
                   >
                     No transactions to display.

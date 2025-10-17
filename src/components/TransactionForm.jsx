@@ -5,40 +5,30 @@ import { toast } from "react-toastify";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import { fetchContacts } from "../utils/contactApi";
-import {
-  createContactTransaction,
-  updateContactTransaction,
-} from "../utils/contactTransactionApi";
 import { createTransaction, updateTransaction } from "../utils/transactionApi";
 
 const TransactionForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Distinguish between transaction types
   const editingTransaction = location.state?.transaction || null;
-  const isContactTransaction = location.state?.isContactTransaction || false;
+  const isContactTransactionOnLoad =
+    location.state?.isContactTransaction || false;
   const isEditMode = !!editingTransaction;
 
-  // --- STATE DECLARATIONS ---
   const [allCategories, setAllCategories] = useState([]);
   const [allLabels, setAllLabels] = useState([]);
   const [selectedLabelIds, setSelectedLabelIds] = useState(
     editingTransaction?.labelIds || []
   );
   const [allContacts, setAllContacts] = useState([]);
-  const [showContactSelect, setShowContactSelect] =
-    useState(isContactTransaction);
-
-  // Set initial contact ID if editing a contact transaction
+  const [showContactSelect, setShowContactSelect] = useState(
+    isContactTransactionOnLoad
+  );
   const [selectedContactId, setSelectedContactId] = useState(
-    isContactTransaction ? editingTransaction?.contactId || "" : ""
+    editingTransaction?.contactId || ""
   );
-
-  const [type, setType] = useState(
-    editingTransaction ? editingTransaction.type : "debit"
-  );
-
+  const [type, setType] = useState(editingTransaction?.type || "debit");
   const [submitting, setSubmitting] = useState(false);
 
   const getTodayDate = () => {
@@ -47,41 +37,24 @@ const TransactionForm = () => {
     return today.toISOString().split("T")[0];
   };
 
-  const [formData, setFormData] = useState(() => {
-    if (editingTransaction) {
-      return {
-        date: editingTransaction.date.split("T")[0],
-        debitCategory:
-          editingTransaction.type === "debit"
-            ? editingTransaction.category
-            : "",
-        creditCategory:
-          editingTransaction.type === "credit"
-            ? editingTransaction.category
-            : "",
-        debitAmount:
-          editingTransaction.type === "debit" ? editingTransaction.amount : "",
-        creditAmount:
-          editingTransaction.type === "credit" ? editingTransaction.amount : "",
-        reimbursable: editingTransaction.reimbursable ? "Y" : "N",
-        comments: editingTransaction.comments || "",
-      };
-    }
-    return {
-      date: getTodayDate(),
-      debitCategory: "",
-      creditCategory: "",
-      debitAmount: "",
-      creditAmount: "",
-      reimbursable: "N",
-      comments: "",
-    };
+  const [formData, setFormData] = useState({
+    date: editingTransaction
+      ? editingTransaction.date.split("T")[0]
+      : getTodayDate(),
+    debitCategory:
+      editingTransaction?.type === "debit" ? editingTransaction.category : "",
+    creditCategory:
+      editingTransaction?.type === "credit" ? editingTransaction.category : "",
+    debitAmount:
+      editingTransaction?.type === "debit" ? editingTransaction.amount : "",
+    creditAmount:
+      editingTransaction?.type === "credit" ? editingTransaction.amount : "",
+    comments: editingTransaction?.comments || "",
   });
 
   const debitCats = allCategories.filter((c) => c.type === "debit");
   const creditCats = allCategories.filter((c) => c.type === "credit");
 
-  // --- EFFECTS ---
   useEffect(() => {
     (async () => {
       try {
@@ -95,34 +68,29 @@ const TransactionForm = () => {
   }, []);
 
   useEffect(() => {
-    const selectedCategoryName =
+    const categoryName =
       type === "debit" ? formData.debitCategory : formData.creditCategory;
-    if (!selectedCategoryName) {
-      if (!isContactTransaction) setShowContactSelect(false);
+    if (!categoryName) {
+      setShowContactSelect(false);
       return;
     }
     const category = allCategories.find(
-      (c) => c.name === selectedCategoryName && c.type === type
+      (c) => c.name === categoryName && c.type === type
     );
+
     if (
       category &&
       (category.status === "given" || category.status === "received")
     ) {
       setShowContactSelect(true);
     } else {
-      if (!isContactTransaction) setShowContactSelect(false);
+      setShowContactSelect(false);
+      setSelectedContactId(""); // Reset contact if category changes to a non-contact type
     }
-  }, [
-    formData.debitCategory,
-    formData.creditCategory,
-    allCategories,
-    type,
-    isContactTransaction,
-  ]);
+  }, [formData.debitCategory, formData.creditCategory, type, allCategories]);
 
-  // --- HANDLERS ---
   const handleTypeToggle = (selectedType) => {
-    if (isEditMode && isContactTransaction) return; // Lock type toggle when editing a contact transaction
+    if (isEditMode && isContactTransactionOnLoad) return; // Prevent switching type when editing a contact transaction
     setType(selectedType);
     setFormData((prev) => ({
       ...prev,
@@ -137,6 +105,7 @@ const TransactionForm = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
   const handleLabelChange = (labelId) => {
     setSelectedLabelIds((prev) =>
       prev.includes(labelId)
@@ -147,74 +116,47 @@ const TransactionForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simplified validation can be added later
 
-    const isSpecialCategory = showContactSelect || isContactTransaction;
-    if (isSpecialCategory && !selectedContactId) {
+    if (showContactSelect && !selectedContactId) {
       toast.error("Please select a contact for this category.");
       return;
     }
-
     setSubmitting(true);
 
-    if (isSpecialCategory) {
-      // Handle Contact Transaction (Create or Update)
-      const payload = {
-        date: formData.date,
-        type,
-        category:
-          type === "debit" ? formData.debitCategory : formData.creditCategory,
-        amount: type === "debit" ? formData.debitAmount : formData.creditAmount,
-        comments: formData.comments,
-        contactId: selectedContactId,
-        labelIds: selectedLabelIds,
-      };
-      try {
-        if (isEditMode) {
-          await updateContactTransaction(editingTransaction.id, payload);
-          toast.success("Contact transaction updated successfully!");
-        } else {
-          await createContactTransaction(payload);
-          toast.success("Contact transaction added successfully!");
-        }
-        navigate("/manage-finances", { state: { refresh: true } });
-      } catch (error) {
-        toast.error(error.message || "An error occurred.");
-      } finally {
-        setSubmitting(false);
-      }
-    } else {
-      const payload = {
-        date: formData.date,
-        type,
-        category:
-          type === "debit" ? formData.debitCategory : formData.creditCategory,
-        amount: type === "debit" ? formData.debitAmount : formData.creditAmount,
-        reimbursable: formData.reimbursable, // Should be 'Y' or 'N'
-        comments: formData.comments,
-        labelIds: selectedLabelIds,
-      };
+    const payload = {
+      date: formData.date,
+      type,
+      category:
+        type === "debit" ? formData.debitCategory : formData.creditCategory,
+      amount:
+        parseFloat(
+          type === "debit" ? formData.debitAmount : formData.creditAmount
+        ) || 0,
+      comments: formData.comments,
+      labelIds: selectedLabelIds,
+      contactId: showContactSelect ? selectedContactId : null,
+    };
 
-      try {
-        if (isEditMode) {
-          await updateTransaction(editingTransaction.id, payload);
-          toast.success("Transaction updated successfully!");
-        } else {
-          await createTransaction(payload);
-          toast.success("Transaction added successfully!");
-        }
-        // Navigate back to the main expense tracker page
-        navigate("/", { state: { refresh: true } });
-      } catch (error) {
-        toast.error(error.message || "An error occurred.");
-      } finally {
-        // This is the crucial part that was missing
-        setSubmitting(false);
+    try {
+      if (isEditMode) {
+        await updateTransaction(editingTransaction.id, payload);
+        toast.success("Transaction updated successfully!");
+      } else {
+        await createTransaction(payload);
+        toast.success("Transaction added successfully!");
       }
+
+      // Navigate to the correct page based on whether it was a contact transaction
+      navigate(showContactSelect ? "/manage-finances" : "/", {
+        state: { refresh: true },
+      });
+    } catch (error) {
+      toast.error(error.message || "An error occurred.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // --- RENDER ---
   return (
     <div className="container">
       <div className="header">
@@ -224,11 +166,6 @@ const TransactionForm = () => {
         </button>
       </div>
       <form onSubmit={handleSubmit}>
-        {/* ... form fields JSX, mostly unchanged ... */}
-        {/* Your existing form fields for date, type, categories, amounts, comments etc. go here. */}
-        {/* The conditional rendering of the contact dropdown is the key part */}
-
-        {/* Date */}
         <div className="form-group">
           <label htmlFor="date" className="required">
             Date
@@ -242,7 +179,6 @@ const TransactionForm = () => {
           />
         </div>
 
-        {/* Type toggle */}
         <div className="transaction-type">
           <button
             type="button"
@@ -250,7 +186,7 @@ const TransactionForm = () => {
               type === "debit" ? "active" : ""
             }`}
             onClick={() => handleTypeToggle("debit")}
-            disabled={isEditMode && isContactTransaction}
+            disabled={isEditMode && isContactTransactionOnLoad}
           >
             Debit
           </button>
@@ -260,13 +196,12 @@ const TransactionForm = () => {
               type === "credit" ? "active" : ""
             }`}
             onClick={() => handleTypeToggle("credit")}
-            disabled={isEditMode && isContactTransaction}
+            disabled={isEditMode && isContactTransactionOnLoad}
           >
             Credit
           </button>
         </div>
 
-        {/* Debit Section */}
         {type === "debit" && (
           <div>
             <div className="form-group">
@@ -319,18 +254,9 @@ const TransactionForm = () => {
                 placeholder="0.00"
               />
             </div>
-            {!isContactTransaction && (
-              <div className="form-group">
-                <label className="required">Reimbursable</label>
-                <div className="radio-group">
-                  {/* ... your radio buttons ... */}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Credit Section */}
         {type === "credit" && (
           <div>
             <div className="form-group">
@@ -386,7 +312,6 @@ const TransactionForm = () => {
           </div>
         )}
 
-        {/* Comments */}
         <div className="form-group">
           <label htmlFor="comments">Comments</label>
           <textarea
@@ -398,24 +323,28 @@ const TransactionForm = () => {
           ></textarea>
         </div>
 
-        {/* Labels */}
         <div className="form-group">
-          <label>Labels</label>
-          <div className="checkbox-group">
-            {allLabels.length === 0 ? (
-              <p className="no-labels">No labels available</p>
-            ) : (
-              allLabels.map((label) => (
-                <label key={label.id} className="checkbox-label">
+          <label>Labels (optional)</label>
+          <div className="labels-group">
+            {allLabels.length > 0 ? (
+              allLabels.map((l) => (
+                <label
+                  key={l.id}
+                  className={`label-chip ${
+                    selectedLabelIds.includes(l.id) ? "selected" : ""
+                  }`}
+                >
                   <input
                     type="checkbox"
-                    value={label.id}
-                    checked={selectedLabelIds.includes(label.id)}
-                    onChange={() => handleLabelChange(label.id)}
+                    value={l.id}
+                    checked={selectedLabelIds.includes(l.id)}
+                    onChange={() => handleLabelChange(l.id)}
                   />
-                  {label.name}
+                  {l.name}
                 </label>
               ))
+            ) : (
+              <p className="no-labels">No labels available</p>
             )}
           </div>
         </div>
