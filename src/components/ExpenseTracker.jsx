@@ -153,10 +153,8 @@ const ExpenseTracker = ({ setToken }) => {
     refreshTransactions();
   }, [location, navigate, token, refreshTransactions]);
 
-  // ✅ Filtering Logic
-  // ✅ Filtering & Sorting Logic
   const filteredTransactions = useMemo(() => {
-    let filtered = transactions;
+    let filtered = [...transactions];
 
     if (selectedCategory !== "All") {
       filtered = filtered.filter((t) => t.category === selectedCategory);
@@ -184,20 +182,19 @@ const ExpenseTracker = ({ setToken }) => {
       );
     }
 
-    // ✅ Sort: latest date first, then newest entry first if same date
+    // This sorting logic is correct and will now work as expected on the copied array.
     return filtered.sort((a, b) => {
-
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
-
-      if (dateB.getTime() === dateA.getTime()) {
-        // For same date, place newest entry first (based on numeric id or timestamp)
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+  
+        // Primary sort: by date, descending (most recent date first)
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime();
+        }
+  
+        // Secondary sort: by ID, descending (newer item first).
         return Number(b.id) - Number(a.id);
-      }
-
-      // Latest date first
-      return dateB - dateA;
-    });
+      });
   }, [
     transactions,
     selectedCategory,
@@ -258,7 +255,7 @@ const ExpenseTracker = ({ setToken }) => {
     setTransactionToDelete(id);
     setShowDeleteModal(true);
   };
-  // ✅ Delete handler uses refresh
+
   const handleConfirmDelete = async () => {
     if (!transactionToDelete) return;
 
@@ -303,9 +300,6 @@ const ExpenseTracker = ({ setToken }) => {
   const finalBalance =
     transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
 
-  // ✅ Export PDF handler
-  // ✅ Export PDF handler
-  // ✅ Export PDF handler
   const handleExportPDF = () => {
     const doc = new jsPDF();
 
@@ -458,15 +452,15 @@ const ExpenseTracker = ({ setToken }) => {
         alternateRowStyles: { fillColor: [232, 234, 246] }, // light indigo
         bodyStyles: { textColor: [33, 33, 33] },
         columnStyles: {
-         0: { halign: "center" }, // Date
-         1: { halign: "center" }, // Category
-         2: { halign: "left" },   // Comments
-         3: { halign: "left" },   // Labels
-         4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" }, // Debit red
-         5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" }, // Credit green
-         6: { halign: "center" }, // Reimb.
-         7: { halign: "right", fontStyle: "bold" }, // Balance
-       },
+          0: { halign: "center" }, // Date
+          1: { halign: "center" }, // Category
+          2: { halign: "left" }, // Comments
+          3: { halign: "left" }, // Labels
+          4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" }, // Debit red
+          5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" }, // Credit green
+          6: { halign: "center" }, // Reimb.
+          7: { halign: "right", fontStyle: "bold" }, // Balance
+        },
       });
     }
 
@@ -499,7 +493,7 @@ const ExpenseTracker = ({ setToken }) => {
                 className="add-btn"
                 onClick={() => navigate("/add-transaction")}
               >
-                + Add Entry 
+                + Add Entry
               </button>
               <button
                 className="add-btn"
@@ -520,6 +514,28 @@ const ExpenseTracker = ({ setToken }) => {
                   className={`user-dropdown ${dropdownOpen ? "show" : ""}`}
                   id="userDropdown"
                 >
+                  <div
+                    className="dropdown-item"
+                    id="manageLabelsBtn"
+                    onClick={() => {
+                      navigate("/manage-finances");
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <i className="fas fa-tag" />
+                    <span>Manage Finances</span>
+                  </div>
+                  <div
+                    className="dropdown-item"
+                    id="manageContactsBtn"
+                    onClick={() => {
+                      navigate("/manage-contacts");
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <i className="fas fa-address-book" />
+                    <span>Manage Contacts</span>
+                  </div>
                   <div
                     className="dropdown-item"
                     id="manageCategoriesBtn"
@@ -738,7 +754,9 @@ const ExpenseTracker = ({ setToken }) => {
                         "-"
                       )}
                     </td>
-                    <td className={entry.type === "credit" ? "credit-amount" : ""}>
+                    <td
+                      className={entry.type === "credit" ? "credit-amount" : ""}
+                    >
                       {entry.type === "credit" ? (
                         <strong>
                           {Number(entry.amount).toLocaleString("en-IN", {

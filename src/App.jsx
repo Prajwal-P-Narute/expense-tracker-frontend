@@ -9,6 +9,8 @@ import { ToastContainer } from 'react-toastify';
 import ResetPassword from './pages/ResetPassword';
 import ManageCategory from './components/ManageCategory';
 import ManageLabel from './components/ManageLabel';
+import FinTrack from './components/FinTrack';
+import ContactManager from './components/ContactManager';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -66,6 +68,20 @@ function App() {
           path="/manage-labels"
           element={token ? <ManageLabel /> : <Navigate to="/login" />}
         />
+
+        {/* ✅ New Manage Labels route */}
+        <Route
+          path="/manage-finances"
+          element={token ? <FinTrack /> : <Navigate to="/login" />}
+        />
+
+         <Route
+          path="/manage-contacts"
+          element={token ? <ContactManager /> : <Navigate to="/login" />}
+        />
+
+        
+
 
       <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>

@@ -354,3 +354,140 @@ h2 {
         justify-content: center;
     }
 }
+
+.toggle-group {
+   display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.toggle-group span {
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  background-color: #f0f0f0;
+  color: #555;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  user-select: none;
+  border: 1px solid #ccc;
+}
+
+.toggle-group span.active {
+  background-color: #3498db;
+  color: white;
+  border: 1px solid #3498db;
+}
+
+.radio-group {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: 10px 0;
+}
+
+.radio-group label {
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.radio-group input[type="radio"] {
+  margin-right: 5px;
+}
+
+
+/* Modern Toggle Slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 26px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #3498db;
+}
+
+input:checked + .slider:before {
+  transform: translateX(24px);
+}
+
+.toggle-label {
+  margin-left: 8px;
+  font-weight: 500;
+  user-select: none;
+}
+
+/* Align Input, Toggle, Button Horizontally */
+.add-category-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.add-category-input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.add-btn {
+  padding: 12px 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.add-btn:hover {
+  background-color: #2980b9;
+}
+
+/* Responsive: Stack on Small Screens */
+@media (max-width: 768px) {
+  .add-category-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-btn {
+    width: 100%;
+  }
+}

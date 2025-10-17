@@ -13,11 +13,11 @@ export async function fetchCategories() {
   return res.json(); // [{id,name,type}]
 }
 
-export async function createCategory(name, type) {
+export async function createCategory(name, type, status) {
   const res = await fetch(`${BASE_URL}/api/categories`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ name, type }),
+    body: JSON.stringify({ name, type, status }),
   });
   if (!res.ok) throw new Error("Failed to create category");
   return res.json();
