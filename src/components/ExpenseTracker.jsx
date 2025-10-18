@@ -439,7 +439,7 @@ const ExpenseTracker = ({ setToken }) => {
                     }}
                   >
                     <i className="fas fa-tag" />
-                    <span>Manage Finances</span>
+                    <span>Contact Ledger</span>
                   </div>
                   <div
                     className="dropdown-item"
