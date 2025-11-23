@@ -15,6 +15,21 @@ const Login = ({ setToken }) => {
     if (token) {
       navigate("/expense-tracker");
     }
+
+    // Check if user was redirected due to session expiration
+    const sessionExpired = sessionStorage.getItem("sessionExpired");
+    if (sessionExpired === "true") {
+      toast.warning("Your session has expired. Please login again.", {
+        position: "top-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+      // Clear the flag
+      sessionStorage.removeItem("sessionExpired");
+    }
   }, [navigate]);
 
   const handleChange = (e) => {
@@ -24,9 +39,7 @@ const Login = ({ setToken }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true); //  disable button
-    
-
+    setLoading(true);
 
     try {
       const res = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -39,17 +52,36 @@ const Login = ({ setToken }) => {
         const data = await res.json();
         localStorage.setItem("token", data.token);
         setToken(data.token);
-        navigate("/expense-tracker");
-        toast.success("Login successful! Redirecting...");
+        
+        // Show success toast
+        toast.success("Login successful! Redirecting to dashboard...", {
+          position: "top-center",
+          autoClose: 2000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        
+        // Redirect after short delay
+        setTimeout(() => {
+          navigate("/expense-tracker");
+        }, 1000);
       } else {
         setError("Invalid email or password");
-        toast.error("Invalid email or password");
+        toast.error("Invalid email or password", {
+          position: "top-center",
+          autoClose: 3000,
+        });
       }
     } catch (err) {
       setError("Network error, please try again");
-      toast.error("Network error, please try again");
-    }finally {
-      setLoading(false); // ✅ enable button again
+      toast.error("Network error, please try again", {
+        position: "top-center",
+        autoClose: 3000,
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,17 +126,17 @@ const Login = ({ setToken }) => {
 
           <button className="btn btn-primary w-100 mb-3" type="submit" disabled={loading}>
             {loading ? (
-    <>
-      <span
-        className="spinner-border spinner-border-sm me-2"
-        role="status"
-        aria-hidden="true"
-      ></span>
-      Please wait...
-    </>
-  ) : (
-    "Login"
-  )}
+              <>
+                <span
+                  className="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                Please wait...
+              </>
+            ) : (
+              "Login"
+            )}
           </button>
 
           <p className="small mb-3">  
@@ -113,7 +145,7 @@ const Login = ({ setToken }) => {
             </a>
           </p>
           <p>
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <a href="/register" className="link-info">
               Register here
             </a>

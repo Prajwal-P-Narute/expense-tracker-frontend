@@ -15,6 +15,7 @@ import DeleteModal from "./DeleteModal";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import { fetchTransactions, deleteTransaction } from "../utils/transactionApi";
+import { fetchWithAuth } from "../utils/apiInterceptor";
 
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ const ExpenseTracker = ({ setToken }) => {
   const [selectedLabel, setSelectedLabel] = useState("All");
   const [labelOptions, setLabelOptions] = useState(["All"]);
   const token = localStorage.getItem("token");
+  
   // close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event) {
@@ -53,18 +55,17 @@ const ExpenseTracker = ({ setToken }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    // Handles date strings like "2025-09-20"
     const parts = dateString.split('-');
     if (parts.length !== 3) return dateString;
     const [year, month, day] = parts;
     return `${day}/${month}/${year}`;
   };
 
-  // ✅ Centralized fetch helper
+  // ✅ Centralized fetch helper with automatic token expiration handling
   const refreshTransactions = useCallback(async () => {
     try {
       const [openingBal, data] = await Promise.all([
-        fetch(`${BASE_URL}/api/transactions/opening-balance`, {
+        fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((res) => res.json()),
         fetchTransactions(),
@@ -73,13 +74,13 @@ const ExpenseTracker = ({ setToken }) => {
       setTransactions(data);
       setCurrentPage(1);
     } catch (err) {
-      if (String(err).includes("401")) {
-        localStorage.removeItem("token");
-        navigate("/login");
+      // Token expiration is handled by apiInterceptor
+      // Only handle other errors here
+      if (!err.message.includes("Session expired")) {
+        toast.error("Failed to load transactions.");
       }
-      toast.error("Failed to load transactions.");
     }
-  }, [token, navigate]);
+  }, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -110,7 +111,9 @@ const ExpenseTracker = ({ setToken }) => {
         );
         setLabelOptions(["All", ...labels.map((l) => l.id)]);
       } catch (error) {
-        toast.error("Failed to load categories or labels.");
+        if (!error.message.includes("Session expired")) {
+          toast.error("Failed to load categories or labels.");
+        }
       }
     };
     loadSupportingData();
@@ -136,7 +139,7 @@ const ExpenseTracker = ({ setToken }) => {
         (t) => Array.isArray(t.labelIds) && t.labelIds.includes(selectedLabel)
       );
     }
-    return filtered; // Data is already sorted by the API
+    return filtered;
   }, [transactions, selectedCategory, startDate, endDate, selectedLabel]);
 
   const currentItems = useMemo(() => {
@@ -160,18 +163,8 @@ const ExpenseTracker = ({ setToken }) => {
   useEffect(() => {
     const now = new Date();
     const monthsArr = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
     ];
     const el = document.getElementById("currentDate");
     if (el)
@@ -188,11 +181,6 @@ const ExpenseTracker = ({ setToken }) => {
     toast.success("Logged out successfully");
   };
 
-  // const confirmDelete = (id) => {
-  //   setTransactionToDelete(id);
-  //   setShowDeleteModal(true);
-  // };
-
   const handleConfirmDelete = async () => {
     if (!transactionToDelete) return;
     try {
@@ -200,7 +188,9 @@ const ExpenseTracker = ({ setToken }) => {
       toast.success("Transaction deleted successfully");
       await refreshTransactions();
     } catch (err) {
-      toast.error("Error deleting transaction");
+      if (!err.message.includes("Session expired")) {
+        toast.error("Error deleting transaction");
+      }
     } finally {
       setShowDeleteModal(false);
       setTransactionToDelete(null);
@@ -225,20 +215,15 @@ const ExpenseTracker = ({ setToken }) => {
 
   const handleExportPDF = () => {
     const doc = new jsPDF();
-
-    // --- Background ---
-    doc.setFillColor(245, 247, 250); // light gray-blue background
-    doc.rect(0, 0, 210, 297, "F"); // full A4 background
-
-    // --- Title Banner ---
-    doc.setFillColor(33, 150, 243); // blue banner
+    doc.setFillColor(245, 247, 250);
+    doc.rect(0, 0, 210, 297, "F");
+    doc.setFillColor(33, 150, 243);
     doc.rect(0, 0, 210, 20, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text(" Expense Report", 105, 13, { align: "center" });
 
-    // --- Summary Section ---
     const totalDebit = filteredTransactions
       .filter((t) => t.type === "debit")
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
@@ -259,35 +244,21 @@ const ExpenseTracker = ({ setToken }) => {
       startY: 34,
       head: [["Metric", "Value"]],
       body: [
-        [
-          "Total Expense",
-          totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Total Credit",
-          totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Closing Balance",
-          currentBal.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
+        ["Total Expense", totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
+        ["Total Credit", totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
+        ["Closing Balance", currentBal.toLocaleString("en-IN", { minimumFractionDigits: 2 })],
       ],
       theme: "grid",
       styles: { fontSize: 11, valign: "middle" },
-      headStyles: {
-        fillColor: [76, 175, 80],
-        textColor: 255,
-        halign: "center",
-      }, // green header
+      headStyles: { fillColor: [76, 175, 80], textColor: 255, halign: "center" },
       bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [240, 248, 255] }, // light blue
+      alternateRowStyles: { fillColor: [240, 248, 255] },
       columnStyles: {
         0: { halign: "left", fontStyle: "bold", cellWidth: 80 },
         1: { halign: "right", cellWidth: 60, textColor: [33, 33, 33] },
       },
     });
 
-    // --- Filters Section ---
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
     doc.text(" Applied Filters", 14, doc.lastAutoTable.finalY + 12);
@@ -304,24 +275,17 @@ const ExpenseTracker = ({ setToken }) => {
       body: [[categoryText, dateText]],
       theme: "grid",
       styles: { fontSize: 10, halign: "center" },
-      headStyles: { fillColor: [255, 152, 0], textColor: 255 }, // orange header
+      headStyles: { fillColor: [255, 152, 0], textColor: 255 },
       bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [255, 243, 224] }, // light orange
+      alternateRowStyles: { fillColor: [255, 243, 224] },
     });
 
-    // --- Transactions Section ---
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
     doc.text(" Transactions", 14, doc.lastAutoTable.finalY + 12);
 
     const tableColumn = [
-      "Date",
-      "Category",
-      "Comments",
-      "Labels",
-      "Debit",
-      "Credit",
-      "Balance",
+      "Date", "Category", "Comments", "Labels", "Debit", "Credit", "Balance",
     ];
     const tableRows = filteredTransactions.map((txn) => {
       const amount = Number(txn.amount) || 0;
@@ -361,26 +325,21 @@ const ExpenseTracker = ({ setToken }) => {
         body: tableRows,
         startY: doc.lastAutoTable.finalY + 18,
         styles: { fontSize: 9, valign: "middle" },
-        headStyles: {
-          fillColor: [63, 81, 181],
-          textColor: 255,
-          halign: "center",
-        }, // Indigo header
-        alternateRowStyles: { fillColor: [232, 234, 246] }, // light indigo
+        headStyles: { fillColor: [63, 81, 181], textColor: 255, halign: "center" },
+        alternateRowStyles: { fillColor: [232, 234, 246] },
         bodyStyles: { textColor: [33, 33, 33] },
         columnStyles: {
-          0: { halign: "center" }, // Date
-          1: { halign: "center" }, // Category
-          2: { halign: "left" }, // Comments
-          3: { halign: "left" }, // Labels
-          4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" }, // Debit red
-          5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" }, // Credit green
-          6: { halign: "right", fontStyle: "bold" }, // Balance
+          0: { halign: "center" },
+          1: { halign: "center" },
+          2: { halign: "left" },
+          3: { halign: "left" },
+          4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" },
+          5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" },
+          6: { halign: "right", fontStyle: "bold" },
         },
       });
     }
 
-    // --- Report Date (bottom-right corner) ---
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(10);
     doc.setTextColor(80);
@@ -388,9 +347,7 @@ const ExpenseTracker = ({ setToken }) => {
       ` Report Date: ${new Date().toLocaleString()}`,
       200,
       pageHeight - 10,
-      {
-        align: "right",
-      }
+      { align: "right" }
     );
 
     doc.save("expense_report.pdf");
@@ -484,7 +441,7 @@ const ExpenseTracker = ({ setToken }) => {
           </div>
         </div>
 
-        {/* ✅ Filter Section */}
+        {/* Filter Section */}
         {filterOpen && (
           <div className="date-filter">
             <label>
@@ -557,7 +514,7 @@ const ExpenseTracker = ({ setToken }) => {
           </div>
         )}
 
-        {/* ✅ Summary Section */}
+        {/* Summary Section */}
         <div className="summary-section">
           <h2 className="summary-title">Summary</h2>
           <div className="summary-cards">
@@ -612,7 +569,6 @@ const ExpenseTracker = ({ setToken }) => {
                 currentItems.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDate(entry.date)}</td>
-
                     <td>{entry.category}</td>
                     <td>{entry.comments || "-"}</td>
                     <td>
@@ -757,7 +713,6 @@ const ExpenseTracker = ({ setToken }) => {
         </div>
       </div>
 
-      {/* Add this at the end of your JSX, inside the main return */}
       <DeleteModal
         show={showDeleteModal}
         onConfirm={handleConfirmDelete}
