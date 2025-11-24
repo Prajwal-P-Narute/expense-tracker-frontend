@@ -10,7 +10,7 @@ export async function fetchCategories() {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to load categories");
-  return res.json(); // [{id,name,type}]
+  return res.json();
 }
 
 export async function createCategory(name, type, status) {
@@ -23,7 +23,6 @@ export async function createCategory(name, type, status) {
     const msg = await res.text();
     throw new Error(msg || "Category already exists");
   }
-
   if (!res.ok) throw new Error("Failed to create category");
   return res.json();
 }
@@ -35,6 +34,19 @@ export async function renameCategory(id, newName) {
     body: JSON.stringify({ newName }),
   });
   if (!res.ok) throw new Error("Failed to rename category");
+  return res.json();
+}
+
+export async function updateCategoryStatus(id, newName, status) {
+  const res = await fetch(`${BASE_URL}/api/categories/${id}/status`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify({ newName, status }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || "Failed to update category");
+  }
   return res.json();
 }
 
@@ -55,5 +67,5 @@ export async function getCategoryUsage(id) {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to check category usage");
-  return res.json(); // { count: number }
+  return res.json();
 }

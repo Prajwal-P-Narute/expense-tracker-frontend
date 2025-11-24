@@ -7,6 +7,7 @@ import {
   renameCategory,
   deleteCategory,
   getCategoryUsage,
+  updateCategoryStatus,
 } from "../utils/categoryApi";
 import { toast } from "react-toastify";
 
@@ -15,6 +16,7 @@ const ManageCategory = () => {
   const [loading, setLoading] = useState(true);
 
   const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryStatus, setEditCategoryStatus] = useState(null);
   const [currentCategory, setCurrentCategory] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -61,9 +63,9 @@ const ManageCategory = () => {
     e.preventDefault();
     const input = e.target.elements[`add-${sectionType}-input`];
     const name = input.value.trim();
-    const { status: catStatus,} = categoryType[sectionType];
+    const { status: catStatus } = categoryType[sectionType];
     if (!name) {
-      toast.error("Please select category type");
+      toast.error("Please enter category name");
       return;
     }
     try {
@@ -73,7 +75,7 @@ const ManageCategory = () => {
       setCategoryType((prev) => ({
         ...prev,
         [sectionType]: { type: "", status: null },
-      })); // reset toggle
+      }));
       await load();
     } catch (e) {
       toast.error(e.message || "Failed to add category");
@@ -83,6 +85,7 @@ const ManageCategory = () => {
   const handleEditClick = (cat) => {
     setCurrentCategory(cat);
     setEditCategoryName(cat.name);
+    setEditCategoryStatus(cat.status || null);
     setShowEditModal(true);
   };
 
@@ -93,7 +96,6 @@ const ManageCategory = () => {
     setUsageLoading(true);
     try {
       const data = await getCategoryUsage(cat.id);
-      // Ensure usageCount is a number
       const count = data && !isNaN(Number(data.count)) ? Number(data.count) : 0;
       setUsageCount(count);
     } catch (e) {
@@ -106,14 +108,53 @@ const ManageCategory = () => {
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editCategoryName.trim()) return;
+    if (!editCategoryName.trim()) {
+      toast.error("Category name cannot be empty");
+      return;
+    }
+
     try {
-      await renameCategory(currentCategory.id, editCategoryName.trim());
-      toast.success("Category renamed");
+      // Only handle status updates if category was created with a status
+      if (currentCategory.status) {
+        // Check if status is being disabled
+        if (!editCategoryStatus) {
+          // User is trying to disable status, check for transactions
+          setUsageLoading(true);
+          try {
+            const data = await getCategoryUsage(currentCategory.id);
+            const count = data && !isNaN(Number(data.count)) ? Number(data.count) : 0;
+            if (count > 0) {
+              toast.error(
+                `Cannot disable ${currentCategory.status} status. This category has ${count} transaction(s) associated with it.`
+              );
+              return;
+            }
+          } catch (e) {
+            console.error("Usage check error:", e);
+            toast.error("Failed to check category usage");
+            return;
+          } finally {
+            setUsageLoading(false);
+          }
+        }
+
+        // Update category with status
+        await updateCategoryStatus(
+          currentCategory.id,
+          editCategoryName.trim(),
+          editCategoryStatus || null
+        );
+      } else {
+        // Category doesn't have status, just rename it
+        await renameCategory(currentCategory.id, editCategoryName.trim());
+      }
+
+      toast.success("Category updated successfully");
       setShowEditModal(false);
       await load();
     } catch (e) {
-      toast.error(e.message || "Rename failed");
+      console.error("Update error:", e);
+      toast.error(e.message || "Update failed");
     }
   };
 
@@ -159,7 +200,6 @@ const ManageCategory = () => {
           placeholder={`Add new ${sectionType} category`}
         />
 
-        {/* User-friendly toggle */}
         <div className="toggle-group">
           {sectionType === "debit" && (
             <span
@@ -171,8 +211,8 @@ const ManageCategory = () => {
                   ...prev,
                   debit:
                     prev.debit.status === "given"
-                      ? { type: "debit", status: null } // Deselect: keep type as debit, status null
-                      : { type: "debit", status: "given" }, // Select: type debit, status given
+                      ? { type: "debit", status: null }
+                      : { type: "debit", status: "given" },
                 }))
               }
             >
@@ -189,8 +229,8 @@ const ManageCategory = () => {
                   ...prev,
                   credit:
                     prev.credit.status === "received"
-                      ? { type: "credit", status: null } // Deselect: keep type as credit, status null
-                      : { type: "credit", status: "received" }, // Select: type credit, status received
+                      ? { type: "credit", status: null }
+                      : { type: "credit", status: "received" },
                 }))
               }
             >
@@ -207,7 +247,12 @@ const ManageCategory = () => {
       <ul className="category-list">
         {list.map((cat) => (
           <li key={cat.id} className="category-item">
-            <span className="category-name">{cat.name}</span>
+            <span className="category-name">
+              {cat.name}
+              {cat.status && (
+                <span className="status-badge"> ({cat.status})</span>
+              )}
+            </span>
             <div className="category-actions">
               <button className="edit-btn" onClick={() => handleEditClick(cat)}>
                 <FaEdit /> Edit
@@ -276,6 +321,47 @@ const ManageCategory = () => {
                   placeholder="Enter category name"
                 />
               </div>
+
+              {/* Only show status toggle if category was created with a status */}
+              {currentCategory?.status && (
+                <div className="form-group">
+                  <label>Status</label>
+                  <div className="toggle-group">
+                    {currentCategory?.type === "debit" && (
+                      <span
+                        className={editCategoryStatus === "given" ? "active" : ""}
+                        onClick={() =>
+                          setEditCategoryStatus(
+                            editCategoryStatus === "given" ? null : "given"
+                          )
+                        }
+                      >
+                        Given
+                      </span>
+                    )}
+                    {currentCategory?.type === "credit" && (
+                      <span
+                        className={
+                          editCategoryStatus === "received" ? "active" : ""
+                        }
+                        onClick={() =>
+                          setEditCategoryStatus(
+                            editCategoryStatus === "received" ? null : "received"
+                          )
+                        }
+                      >
+                        Received
+                      </span>
+                    )}
+                  </div>
+                  {!editCategoryStatus && (
+                    <small style={{ color: "#f39c12", marginTop: "5px", display: "block" }}>
+                      Note: Disabling status will be checked for existing transactions
+                    </small>
+                  )}
+                </div>
+              )}
+
               <div className="modal-actions">
                 <button
                   type="button"
@@ -318,9 +404,9 @@ const ManageCategory = () => {
               <>
                 <div className="transaction-warning">
                   <p>
-                    <FaExclamationTriangle /> This category has transactions
-                    associated with it. Please select a new category to transfer
-                    these transactions to before deleting.
+                    <FaExclamationTriangle /> This category has {usageCount}{" "}
+                    transaction(s) associated with it. Please select a new
+                    category to transfer these transactions to before deleting.
                   </p>
                 </div>
                 <form onSubmit={handleDeleteCategory}>
