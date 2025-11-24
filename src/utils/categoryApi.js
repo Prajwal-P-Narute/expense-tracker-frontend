@@ -19,6 +19,11 @@ export async function createCategory(name, type, status) {
     headers: authHeaders(),
     body: JSON.stringify({ name, type, status }),
   });
+  if (res.status === 409) {
+    const msg = await res.text();
+    throw new Error(msg || "Category already exists");
+  }
+
   if (!res.ok) throw new Error("Failed to create category");
   return res.json();
 }
