@@ -68,6 +68,13 @@ const TransactionForm = () => {
   }, []);
 
   useEffect(() => {
+    
+    if (isEditMode && editingTransaction?.contactId) {
+    setShowContactSelect(true);
+    setSelectedContactId(editingTransaction.contactId);
+    return;
+  }
+  
     const categoryName =
       type === "debit" ? formData.debitCategory : formData.creditCategory;
     if (!categoryName) {
@@ -87,7 +94,7 @@ const TransactionForm = () => {
       setShowContactSelect(false);
       setSelectedContactId(""); // Reset contact if category changes to a non-contact type
     }
-  }, [formData.debitCategory, formData.creditCategory, type, allCategories]);
+  }, [formData.debitCategory, formData.creditCategory, type, allCategories, isEditMode, editingTransaction,]);
 
   const handleTypeToggle = (selectedType) => {
     if (isEditMode && isContactTransactionOnLoad) return; // Prevent switching type when editing a contact transaction
