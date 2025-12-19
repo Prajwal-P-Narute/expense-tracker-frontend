@@ -68,8 +68,8 @@ export default function ManageLabel() {
       setNewColor(colorOptions[0]); // reset
       await reload();
       toast.success("Label created");
-    } catch {
-      toast.error("Failed to create label");
+    } catch (err) {
+      toast.error(err.message || "Failed to create label");
     }
   };
 

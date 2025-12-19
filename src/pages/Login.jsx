@@ -51,6 +51,7 @@ const Login = ({ setToken }) => {
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem("token", data.token);
+        localStorage.setItem("userName", data.name);
         setToken(data.token);
         
         // Show success toast

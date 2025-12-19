@@ -150,6 +150,10 @@ const FinTrack = () => {
             <span>Contact Ledger</span>
           </div>
           <div className="controls">
+            <button className="btn btn-secondary" onClick={() => navigate("/")}>
+              <i className="fas fa-home"></i> Home
+            </button>
+
             <button
               className="btn btn-primary"
               onClick={() =>
@@ -336,9 +340,9 @@ const FinTrack = () => {
             </table>
           </div>
         </div>
-        <footer>
+        {/* <footer>
           <p>FinTrack © 2025 - Your Personal Finance Manager</p>
-        </footer>
+        </footer> */}
       </div>
       <DeleteModal
         show={showDeleteModal}
