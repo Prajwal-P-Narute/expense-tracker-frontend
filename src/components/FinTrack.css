@@ -77,6 +77,20 @@
   gap: 8px;
 }
 
+.fintrack-container .btn-secondary {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(67, 97, 238, 0.3);
+}
+
+.fintrack-container .btn-secondary:hover {
+  background: #3651d4; /* slightly darker primary */
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(67, 97, 238, 0.45);
+}
+
+
 .fintrack-container .logo:hover {
   transform: scale(1.05);
   text-shadow: 0 0 18px rgba(78, 84, 200, 0.6);

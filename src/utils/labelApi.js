@@ -18,6 +18,11 @@ export async function createLabel(payload) {
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
+
+  if (res.status === 409) {
+    const msg = await res.text();
+    throw new Error(msg || "Label already exists");
+  }
   if (!res.ok) throw new Error("Failed to create label");
   return res.json();
 }
