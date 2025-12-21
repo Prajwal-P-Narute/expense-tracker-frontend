@@ -373,6 +373,13 @@
     padding: 10px;
   }
 
+  .fintrack-container .controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+
   .fintrack-container header {
     flex-direction: column;
     align-items: flex-start;
