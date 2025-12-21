@@ -43,6 +43,8 @@ const ExpenseTracker = ({ setToken }) => {
   const [userName, setUserName] = useState("");
   const token = localStorage.getItem("token");
   const searchInputRef = useRef(null);
+  const searchPopupRef = useRef(null);
+
 
 
   // 🔍 Column search
@@ -74,6 +76,22 @@ const ExpenseTracker = ({ setToken }) => {
   }
 }, [activeSearchColumn]);
 
+
+useEffect(() => {
+  function handleOutsideClick(event) {
+    // if search popup is open
+    if (
+      activeSearchColumn &&
+      searchPopupRef.current &&
+      !searchPopupRef.current.contains(event.target)
+    ) {
+      setActiveSearchColumn(null);
+    }
+  }
+
+  document.addEventListener("mousedown", handleOutsideClick);
+  return () => document.removeEventListener("mousedown", handleOutsideClick);
+}, [activeSearchColumn]);
 
   useEffect(() => {
     const name = localStorage.getItem("userName");
@@ -401,167 +419,188 @@ const ExpenseTracker = ({ setToken }) => {
   const finalBalance =
     transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
 
+    const getEffectiveCategoryForPDF = () => {
+  if (selectedCategory !== "All") return selectedCategory;
+
+  if (columnSearch.category) {
+    return exactMatchColumns.category
+      ? columnSearch.category
+      : `Contains "${columnSearch.category}"`;
+  }
+
+  return "All";
+};
+
+const getEffectiveDateRangeForPDF = () => {
+  // Priority 1: Date filter
+  if (startDate || endDate) {
+    const from = startDate ? formatDate(startDate) : "Any";
+    const to = endDate ? formatDate(endDate) : "Any";
+    return `${from} To ${to}`;
+  }
+
+  // Priority 2: Date column search
+  if (columnSearch.date) {
+    return exactMatchColumns.date
+      ? formatDate(columnSearch.date)
+      : `Contains "${columnSearch.date}"`;
+  }
+
+  return "All Dates";
+};
+
+
   const handleExportPDF = () => {
     const doc = new jsPDF();
-    doc.setFillColor(245, 247, 250);
-    doc.rect(0, 0, 210, 297, "F");
-    doc.setFillColor(33, 150, 243);
-    doc.rect(0, 0, 210, 20, "F");
+    
+    // --- 1. Generate Detailed Timestamp for Filename ---
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.getHours().toString().padStart(2, '0') + "-" + 
+                    now.getMinutes().toString().padStart(2, '0') + "-" + 
+                    now.getSeconds().toString().padStart(2, '0');
+    
+    // Filename: ExpenseReport_User_Name_2025-12-21_20-00-00.pdf
+    const fileName = `ExpenseReport_${userName.replace(/\s+/g, "_")}_${dateStr}_${timeStr}.pdf`;
+
+    // --- 2. PDF Header Section (Matches Contact Ledger) ---
+    doc.setFillColor(67, 97, 238); // FinTrack Primary Blue
+    doc.rect(0, 0, 210, 25, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(" Expense Report", 105, 13, { align: "center" });
+    doc.text("EXPENSE TRACKER REPORT", 105, 16, { align: "center" });
 
+    // --- 3. Report Metadata & Applied Filters ---
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(`User: ${userName || "Guest"}`, 14, 35);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generated on: ${now.toLocaleString("en-IN")}`, 14, 40);
+    
+    const categoryText = getEffectiveCategoryForPDF();
+    const dateText = getEffectiveDateRangeForPDF();
+    doc.setFont("helvetica", "italic");
+    doc.text(`Filters: Category: ${categoryText} | Date: ${dateText}`, 14, 45);
+
+    // --- 4. Dynamic Summary Table (Dashboard Style) ---
+    // Calculate stats based on filtered data
     const totalDebit = filteredTransactions
       .filter((t) => t.type === "debit")
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-
     const totalCredit = filteredTransactions
       .filter((t) => t.type === "credit")
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const netBalance = totalCredit - totalDebit;
 
-    const currentBal =
-      filteredTransactions.length > 0
-        ? filteredTransactions[0].runningBalance
-        : openingBalance;
-
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text(" Summary", 14, 28);
     autoTable(doc, {
-      startY: 34,
-      head: [["Metric", "Value"]],
-      body: [
-        [
-          "Total Expense",
-          totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Total Credit",
-          totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Closing Balance",
-          currentBal.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-      ],
+      startY: 50,
+      head: [["Total Expense", "Total Income", "Net Movement"]],
+      body: [[
+        `INR ${totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+        `INR ${totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+        `INR ${netBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+      ]],
       theme: "grid",
-      styles: { fontSize: 11, valign: "middle" },
-      headStyles: {
-        fillColor: [76, 175, 80],
-        textColor: 255,
+      headStyles: { 
+        fillColor: [52, 58, 64], // Dark Gray
         halign: "center",
+        fontSize: 10 
       },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [240, 248, 255] },
-      columnStyles: {
-        0: { halign: "left", fontStyle: "bold", cellWidth: 80 },
-        1: { halign: "right", cellWidth: 60, textColor: [33, 33, 33] },
+      styles: { 
+        halign: "center", 
+        fontSize: 11, 
+        fontStyle: "bold",
+        cellPadding: 4 
       },
+      didParseCell: function (data) {
+        if (data.section === 'body') {
+          // Total Expense (Red)
+          if (data.column.index === 0) {
+            data.cell.styles.textColor = [220, 53, 69];
+            data.cell.styles.fillColor = [255, 241, 242];
+          }
+          // Total Income (Green)
+          if (data.column.index === 1) {
+            data.cell.styles.textColor = [40, 167, 69];
+            data.cell.styles.fillColor = [240, 253, 244];
+          }
+          // Net Movement (Dynamic)
+          if (data.column.index === 2) {
+            if (netBalance < 0) {
+              data.cell.styles.textColor = [220, 53, 69]; 
+              data.cell.styles.fillColor = [255, 235, 235]; 
+            } else {
+              data.cell.styles.textColor = [67, 97, 238]; 
+              data.cell.styles.fillColor = [235, 240, 255]; 
+            }
+          }
+        }
+      }
     });
 
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text(" Applied Filters", 14, doc.lastAutoTable.finalY + 12);
-
-    const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
-    const dateText =
-      startDate && endDate
-        ? `${formatDate(startDate)} To ${formatDate(endDate)}`
-        : "All Dates";
+    // --- 5. Transactions List Table ---
+    const tableColumn = ["Date", "Category", "Comments", "Type", "Amount", "Balance"];
+    const tableRows = filteredTransactions.map((t) => [
+      formatDate(t.date),
+      t.category,
+      t.comments || "-",
+      t.type === "debit" ? "EXPENSE" : "INCOME",
+      t.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+      t.runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })
+    ]);
 
     autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 18,
-      head: [["Category", "Date Range"]],
-      body: [[categoryText, dateText]],
-      theme: "grid",
-      styles: { fontSize: 10, halign: "center" },
-      headStyles: { fillColor: [255, 152, 0], textColor: 255 },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [255, 243, 224] },
+      startY: doc.lastAutoTable.finalY + 12,
+      head: [tableColumn],
+      body: tableRows,
+      theme: "striped",
+      headStyles: { fillColor: [67, 97, 238] }, // Matches Header Blue
+      styles: { fontSize: 8.5 },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 20, halign: "center" },
+        4: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+        5: { cellWidth: 25, halign: "right" }
+      },
+      didParseCell: function (data) {
+        if (data.section === 'body') {
+          // Color code Type column
+          if (data.column.index === 3) {
+            if (data.cell.raw === "EXPENSE") {
+              data.cell.styles.textColor = [220, 53, 69]; // Red
+            } else {
+              data.cell.styles.textColor = [40, 167, 69]; // Green
+            }
+          }
+          // Color code Amount column
+          if (data.column.index === 4) {
+             const type = data.row.cells[3].raw;
+             data.cell.styles.textColor = type === "EXPENSE" ? [220, 53, 69] : [40, 167, 69];
+          }
+        }
+      }
     });
 
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text(" Transactions", 14, doc.lastAutoTable.finalY + 12);
-
-    const tableColumn = [
-      "Date",
-      "Category",
-      "Comments",
-      "Labels",
-      "Debit",
-      "Credit",
-      "Balance",
-    ];
-    const tableRows = filteredTransactions.map((txn) => {
-      const amount = Number(txn.amount) || 0;
-      const runningBalance = Number(txn.runningBalance) || 0;
-      const labelNames = Array.isArray(txn.labelIds)
-        ? txn.labelIds
-            .map((id) => labelMap[id]?.name || "")
-            .filter(Boolean)
-            .join(", ")
-        : "-";
-      return [
-        formatDate(txn.date),
-        txn.category,
-        txn.comments || "-",
-        labelNames,
-        txn.type === "debit"
-          ? amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-          : "",
-        txn.type === "credit"
-          ? amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-          : "",
-        runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-      ];
-    });
-
-    if (tableRows.length === 0) {
-      doc.setFontSize(12);
-      doc.setTextColor(200, 0, 0);
+    // --- 6. Footer (Page Numbers) ---
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(9);
+      doc.setTextColor(150);
       doc.text(
-        " No transactions match the selected filters.",
-        14,
-        doc.lastAutoTable.finalY + 18
+        `Page ${i} of ${pageCount} | FinTrack Expense Report`, 
+        doc.internal.pageSize.width / 2, 
+        doc.internal.pageSize.height - 10, 
+        { align: "center" }
       );
-    } else {
-      autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: doc.lastAutoTable.finalY + 18,
-        styles: { fontSize: 9, valign: "middle" },
-        headStyles: {
-          fillColor: [63, 81, 181],
-          textColor: 255,
-          halign: "center",
-        },
-        alternateRowStyles: { fillColor: [232, 234, 246] },
-        bodyStyles: { textColor: [33, 33, 33] },
-        columnStyles: {
-          0: { halign: "center" },
-          1: { halign: "center" },
-          2: { halign: "left" },
-          3: { halign: "left" },
-          4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" },
-          5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" },
-          6: { halign: "right", fontStyle: "bold" },
-        },
-      });
     }
 
-    const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(10);
-    doc.setTextColor(80);
-    doc.text(
-      ` Report Date: ${new Date().toLocaleString()}`,
-      200,
-      pageHeight - 10,
-      { align: "right" }
-    );
-
-    doc.save("expense_report.pdf");
+    // --- 7. Save the File ---
+    doc.save(fileName);
   };
 
   return (
@@ -822,7 +861,8 @@ const ExpenseTracker = ({ setToken }) => {
         {/* Transactions table */}
         <div className="table-wrapper">
           <h2 className="month-heading">Transactions</h2>
-          <table>
+          <div className="table-scroll-wrapper">
+             <table className="transaction-table">
             <thead>
               <tr>
                 <th>
@@ -856,7 +896,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "date" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search date..."
@@ -926,7 +966,7 @@ const ExpenseTracker = ({ setToken }) => {
                   </span>
                   {/* 🔍 SEARCH BOX */}
                   {activeSearchColumn === "category" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search category..."
@@ -997,7 +1037,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "comments" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search comments..."
@@ -1068,7 +1108,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "label" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search label..."
@@ -1142,7 +1182,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "debit" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search debit..."
@@ -1209,7 +1249,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "credit" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search credit..."
@@ -1279,7 +1319,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "balance" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search balance..."
@@ -1432,6 +1472,8 @@ const ExpenseTracker = ({ setToken }) => {
               )}
             </tbody>
           </table>
+          </div>
+          
         </div>
 
         {/* Pagination */}
@@ -1463,14 +1505,13 @@ const ExpenseTracker = ({ setToken }) => {
           </button>
         </div>
 
-        {/* Footer summary */}
-        <div className="footer">
-          <div className="footer-actions">
-            <button className="action-btn" onClick={handleExportPDF}>
-              Export PDF
-            </button>
-          </div>
-        </div>
+        <button
+        className="export-pdf-fab"
+        onClick={handleExportPDF}
+        title="Export PDF"
+      >
+        <i className="fas fa-file-pdf"></i>
+      </button>
       </div>
 
       <DeleteModal

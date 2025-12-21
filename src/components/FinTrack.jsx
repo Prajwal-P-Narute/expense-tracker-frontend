@@ -283,9 +283,6 @@ const FinTrack = () => {
             <span>Contact Ledger</span>
           </div>
           <div className="controls">
-            <button className="btn btn-secondary" onClick={handleExportPDF}>
-              <i className="fas fa-file-pdf"></i> Export PDF
-            </button>
             <button className="btn btn-secondary" onClick={() => navigate("/")}>
               <i className="fas fa-home"></i> Home
             </button>
@@ -480,6 +477,14 @@ const FinTrack = () => {
           <p>FinTrack © 2025 - Your Personal Finance Manager</p>
         </footer> */}
       </div>
+      <button
+  className="export-pdf-fab"
+  onClick={handleExportPDF}
+  title="Export PDF"
+>
+  <i className="fas fa-file-pdf"></i>
+</button>
+
       <DeleteModal
         show={showDeleteModal}
         onConfirm={handleConfirmDelete}
