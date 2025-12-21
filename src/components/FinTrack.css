@@ -491,3 +491,119 @@
     font-size: 1.2rem;
   }
 }
+
+/* ============================= */
+/* ✅ iPad Air (820 × 1180 FIX) */
+/* ============================= */
+@media (min-width: 810px) and (max-width: 840px) {
+  /* Keep layout intact */
+  .fintrack-container .view-container {
+    height: calc(100vh - 260px); /* header + dashboard space */
+    overflow: hidden;
+  }
+
+  /* Sidebar scroll */
+  .fintrack-container .sidebar {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+
+  /* Main content scroll (both directions) */
+  .fintrack-container .main-content {
+    max-height: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  /* Table must scroll horizontally */
+  .fintrack-container table {
+    min-width: 900px; /* forces horizontal scroll */
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+/* ===================================== */
+/* ✅ Large Tablets FIX (912 × 1368 SAFE) */
+/* ===================================== */
+@media (min-width: 841px) and (max-width: 1024px) {
+
+  /* ❌ DO NOT lock full container height */
+  .fintrack-container {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Let content define height */
+  .fintrack-container .view-container {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  /* Sidebar scroll only if needed */
+  .fintrack-container .sidebar {
+    max-height: 65vh;
+    overflow-y: auto;
+  }
+
+  /* Main content must always be visible */
+  .fintrack-container .main-content {
+    max-height: 65vh;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  /* Ensure table is scrollable horizontally */
+  .fintrack-container table {
+    min-width: 950px;
+    display: block;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+}
+/* ============================= */
+/* ✅ Export PDF Floating Button */
+/* ============================= */
+
+.export-pdf-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #dc3545, #b02a37);
+  color: #ffffff;
+  font-size: 1.3rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(220, 53, 69, 0.4);
+  z-index: 999;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-pdf-fab:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 12px 24px rgba(220, 53, 69, 0.55);
+}
+
+.export-pdf-fab:active {
+  transform: scale(0.95);
+}
+
+/* Mobile safe spacing */
+@media (max-width: 768px) {
+  .export-pdf-fab {
+    bottom: 16px;
+    right: 16px;
+    width: 50px;
+    height: 50px;
+    font-size: 1.1rem;
+  }
+}
+
+
