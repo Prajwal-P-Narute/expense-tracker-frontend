@@ -43,6 +43,8 @@ const ExpenseTracker = ({ setToken }) => {
   const [userName, setUserName] = useState("");
   const token = localStorage.getItem("token");
   const searchInputRef = useRef(null);
+  const searchPopupRef = useRef(null);
+
 
 
   // 🔍 Column search
@@ -90,6 +92,23 @@ const ExpenseTracker = ({ setToken }) => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+  function handleOutsideClick(event) {
+    // if search popup is open
+    if (
+      activeSearchColumn &&
+      searchPopupRef.current &&
+      !searchPopupRef.current.contains(event.target)
+    ) {
+      setActiveSearchColumn(null);
+    }
+  }
+
+  document.addEventListener("mousedown", handleOutsideClick);
+  return () => document.removeEventListener("mousedown", handleOutsideClick);
+}, [activeSearchColumn]);
+
 
   const getColumnValue = useCallback(
     (tx, key) => {
@@ -866,7 +885,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "date" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search date..."
@@ -936,7 +955,7 @@ const ExpenseTracker = ({ setToken }) => {
                   </span>
                   {/* 🔍 SEARCH BOX */}
                   {activeSearchColumn === "category" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search category..."
@@ -1007,7 +1026,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "comments" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search comments..."
@@ -1078,7 +1097,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "label" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search label..."
@@ -1152,7 +1171,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "debit" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search debit..."
@@ -1219,7 +1238,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "credit" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search credit..."
@@ -1289,7 +1308,7 @@ const ExpenseTracker = ({ setToken }) => {
                     />
                   </span>
                   {activeSearchColumn === "balance" && (
-                    <div className="search-popup">
+                    <div className="search-popup" ref={searchPopupRef}>
                       <input
                       ref={searchInputRef}
                         placeholder="Search balance..."
