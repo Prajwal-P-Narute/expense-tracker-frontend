@@ -9,18 +9,36 @@ const authHeaders = () => ({
 });
 
 export async function fetchTransactions() {
-  const res = await fetchWithAuth(`${BASE_URL}/api/transactions`, {
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error("Failed to load transactions");
-  return res.json();
+  try {
+    const res = await fetchWithAuth(`${BASE_URL}/api/transactions`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      // If not OK, return empty array instead of throwing
+      console.error("Failed to load transactions, status:", res.status);
+      return [];
+    }
+    const data = await res.json();
+    // Ensure we always return an array
+    return Array.isArray(data) ? data : (Array.isArray(data.content) ? data.content : []);
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    return []; // Return empty array instead of throwing
+  }
 }
 
 // New function for FinTrack page
-export async function fetchContactTransactions() {
-  const res = await fetchWithAuth(`${BASE_URL}/api/transactions/contacts`, {
+export async function fetchContactTransactions(page = 0, pageSize = 20, contactId = null, search = null) {
+  const params = new URLSearchParams();
+  params.append('page', page);
+  params.append('size', pageSize);
+  if (contactId) params.append('contactId', contactId);
+  if (search) params.append('search', search);
+  
+  const res = await fetchWithAuth(`${BASE_URL}/api/transactions/contacts?${params.toString()}`, {
     headers: authHeaders(),
   });
+  
   if (!res.ok) throw new Error("Failed to load contact transactions");
   return res.json();
 }

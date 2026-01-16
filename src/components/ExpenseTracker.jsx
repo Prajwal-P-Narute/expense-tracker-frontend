@@ -143,19 +143,19 @@ const ExpenseTracker = ({ setToken }) => {
     [labelMap]
   );
 
-  const getSuggestions = (key, typedValue) => {
-    if (!typedValue) return [];
+ const getSuggestions = useCallback((key, typedValue) => {
+  if (!typedValue || !Array.isArray(transactions)) return [];
 
-    return [
-      ...new Set(
-        transactions
-          .map((tx) => getColumnValue(tx, key))
-          .filter(Boolean)
-          .map((v) => v.toString())
-          .filter((v) => v.toLowerCase().includes(typedValue.toLowerCase()))
-      ),
-    ].slice(0, 8); // limit suggestions
-  };
+  return [
+    ...new Set(
+      transactions
+        .map((tx) => getColumnValue(tx, key))
+        .filter(Boolean)
+        .map((v) => v.toString())
+        .filter((v) => v.toLowerCase().includes(typedValue.toLowerCase()))
+    ),
+  ].slice(0, 8); // limit suggestions
+}, [transactions, getColumnValue]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -167,24 +167,26 @@ const ExpenseTracker = ({ setToken }) => {
 
   // ✅ Centralized fetch helper with automatic token expiration handling
   const refreshTransactions = useCallback(async () => {
-    try {
-      const [openingBal, data] = await Promise.all([
-        fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((res) => res.json()),
-        fetchTransactions(),
-      ]);
-      setOpeningBalance(openingBal);
-      setTransactions(data);
-      setCurrentPage(1);
-    } catch (err) {
-      // Token expiration is handled by apiInterceptor
-      // Only handle other errors here
-      if (!err.message.includes("Session expired")) {
-        toast.error("Failed to load transactions.");
-      }
+  try {
+    const [openingBal, data] = await Promise.all([
+      fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((res) => res.json()),
+      fetchTransactions().catch(() => []), // Return empty array on error
+    ]);
+    setOpeningBalance(openingBal);
+    setTransactions(Array.isArray(data) ? data : []);
+    setCurrentPage(1);
+  } catch (err) {
+    // Token expiration is handled by apiInterceptor
+    // Only handle other errors here
+    if (!err.message.includes("Session expired")) {
+      toast.error("Failed to load transactions.");
     }
-  }, [token]);
+    // Ensure transactions is set to empty array even on error
+    setTransactions([]);
+  }
+}, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -224,8 +226,7 @@ const ExpenseTracker = ({ setToken }) => {
   }, [location.key]);
 
   const filteredTransactions = useMemo(() => {
-    let data = [...transactions];
-
+    let data = Array.isArray(transactions) ? [...transactions] : [];
     // existing filters (UNCHANGED)
     if (selectedCategory !== "All") {
       data = data.filter((t) => t.category === selectedCategory);

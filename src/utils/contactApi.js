@@ -1,16 +1,33 @@
 import { BASE_URL } from "./api";
+import { fetchWithAuth } from "./apiInterceptor"; 
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
-export async function fetchContacts() {
-  const res = await fetch(`${BASE_URL}/api/contacts`, {
+export async function fetchContacts(page = 0, pageSize = 10, search = null) {
+  const params = new URLSearchParams();
+  params.append('page', page);
+  params.append('size', pageSize);
+  if (search) params.append('search', search);
+  
+  const res = await fetchWithAuth(`${BASE_URL}/api/contacts?${params.toString()}`, {
     headers: authHeaders(),
   });
+  
   if (!res.ok) throw new Error("Failed to load contacts");
   return res.json();
+}
+
+export async function fetchAllContacts() {
+  const res = await fetchWithAuth(`${BASE_URL}/api/contacts?size=1000`, {
+    headers: authHeaders(),
+  });
+  
+  if (!res.ok) throw new Error("Failed to load contacts");
+  const data = await res.json();
+  return data.content || [];
 }
 
 export async function createContact(contactData) {
