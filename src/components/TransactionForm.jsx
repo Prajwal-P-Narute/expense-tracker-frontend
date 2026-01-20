@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
-import { fetchContacts } from "../utils/contactApi";
+import { fetchAllContacts } from "../utils/contactApi";
 import { createTransaction, updateTransaction } from "../utils/transactionApi";
 
 const TransactionForm = () => {
@@ -60,7 +60,7 @@ const TransactionForm = () => {
       try {
         setAllCategories(await fetchCategories());
         setAllLabels(await fetchLabels());
-        setAllContacts(await fetchContacts());
+        setAllContacts(await fetchAllContacts());
       } catch (error) {
         toast.error("Failed to load necessary data.");
       }

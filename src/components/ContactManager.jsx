@@ -23,20 +23,23 @@ const ContactManager = () => {
   const nameInputRef = useRef(null);
 
   const loadData = async () => {
-    setLoading(true);
-    try {
-      const [contactsData, transactionsData] = await Promise.all([
-        fetchContacts(),
-        fetchContactTransactions(),
-      ]);
-      setContacts(contactsData);
-      setTransactions(transactionsData);
-    } catch (e) {
-      toast.error('Failed to load necessary data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const [contactsPage, transactionsData] = await Promise.all([
+      fetchContacts(),
+      fetchContactTransactions(),
+    ]);
+
+    // ✅ IMPORTANT FIX
+    setContacts(contactsPage.content || []);
+    setTransactions(transactionsData);
+  } catch (e) {
+    toast.error('Failed to load necessary data.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     loadData();
