@@ -10,20 +10,52 @@ const authHeaders = () => ({
 
 export async function fetchTransactions() {
   try {
-    const res = await fetchWithAuth(`${BASE_URL}/api/transactions`, {
-      headers: authHeaders(),
-    });
-    if (!res.ok) {
-      // If not OK, return empty array instead of throwing
-      console.error("Failed to load transactions, status:", res.status);
-      return [];
-    }
-    const data = await res.json();
-    // Ensure we always return an array
-    return Array.isArray(data) ? data : (Array.isArray(data.content) ? data.content : []);
+    // Use fetchAllTransactions to get ALL transactions
+    return await fetchAllTransactions();
   } catch (error) {
     console.error("Error fetching transactions:", error);
-    return []; // Return empty array instead of throwing
+    return [];
+  }
+}
+
+export async function fetchAllTransactions() {
+  try {
+    let allTransactions = [];
+    let page = 0;
+    const pageSize = 50; // Fetch more per request
+    let hasMore = true;
+    
+    while (hasMore) {
+      const res = await fetchWithAuth(
+        `${BASE_URL}/api/transactions?page=${page}&size=${pageSize}`,
+        {
+          headers: authHeaders(),
+        }
+      );
+      
+      if (!res.ok) {
+        console.error("Failed to load transactions, status:", res.status);
+        break;
+      }
+      
+      const data = await res.json();
+      console.log(`Page ${page} response:`, data);
+      
+      if (data && data.content && Array.isArray(data.content)) {
+        allTransactions = [...allTransactions, ...data.content];
+        // Check if there are more pages
+        hasMore = !data.last && data.content.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    console.log(`Total transactions fetched: ${allTransactions.length}`);
+    return allTransactions;
+  } catch (error) {
+    console.error("Error fetching all transactions:", error);
+    return [];
   }
 }
 
