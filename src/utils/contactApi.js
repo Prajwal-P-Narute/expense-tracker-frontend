@@ -53,6 +53,13 @@ export async function updateContact(id, contactData) {
     headers: authHeaders(),
     body: JSON.stringify(contactData), // {name, email, mobNo}
   });
+
+  if (res.status === 409) {   // handle conflict
+    const msg = await res.text();
+    throw new Error(msg || "A contact with this name already exists.");
+  }
+
+  
   if (!res.ok) {
     const errorData = await res.json();
     throw new Error(errorData.message || "Failed to update contact");
