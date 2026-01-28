@@ -116,7 +116,8 @@
 }
 
 .go-to-page-input {
-  width: 100px;
+  width: 150px;
+  min-width: 130px;
   padding: 0.375rem 0.75rem;
   border: 1px solid #ced4da;
   border-radius: 6px;
@@ -234,4 +235,14 @@
     display: inline-flex;
     min-width: 2.5rem;
   }
+}
+
+.go-to-page-error {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #dc3545; /* danger red */
+}
+
+.go-to-page-input.error {
+  border-color: #dc3545;
 }
