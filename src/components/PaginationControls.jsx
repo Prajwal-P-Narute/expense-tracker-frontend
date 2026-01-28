@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import "./PaginationControls.css";
 
+
+
 const PaginationControls = ({
   currentPage,
   totalPages,
@@ -12,21 +14,38 @@ const PaginationControls = ({
   isLoading = false,
 }) => {
   const [goToPageInput, setGoToPageInput] = useState("");
+const [goToPageError, setGoToPageError] = useState("");
 
   const handleGoToPage = (e) => {
-    e.preventDefault();
-    if (goToPageInput === "") return;
-    
-    const pageNum = parseInt(goToPageInput, 10);
-    if (isNaN(pageNum) || pageNum < 1 || pageNum > totalPages) {
-      // Show error or reset
-      setGoToPageInput("");
-      return;
-    }
-    
-    onPageChange(pageNum - 1); // Convert to 0-based
-    setGoToPageInput("");
-  };
+  e.preventDefault();
+
+  if (goToPageInput === "") return;
+
+  const pageNum = Number(goToPageInput);
+
+  if (isNaN(pageNum)) {
+    setGoToPageError("Please enter a valid number");
+    return;
+  }
+
+  if (pageNum < 1) {
+    setGoToPageError("Page number must be at least 1");
+    return;
+  }
+
+  if (pageNum > totalPages) {
+    setGoToPageError(
+      `Page number exceeds total pages (${totalPages})`
+    );
+    return;
+  }
+
+  // ✅ Valid page
+  setGoToPageError("");
+  onPageChange(pageNum - 1); // 0-based index
+  setGoToPageInput("");
+};
+
 
   const handlePageSizeChange = (e) => {
     const newSize = parseInt(e.target.value, 10);
@@ -160,7 +179,11 @@ const PaginationControls = ({
               min="1"
               max={totalPages}
               value={goToPageInput}
-              onChange={(e) => setGoToPageInput(e.target.value)}
+             onChange={(e) => {
+  setGoToPageInput(e.target.value);
+  setGoToPageError("");
+}}
+
               placeholder={`Go to page (1-${totalPages})`}
               className="go-to-page-input"
               aria-label="Enter page number to navigate to"
@@ -185,6 +208,13 @@ const PaginationControls = ({
           <span className="sr-only">Loading...</span>
         </div>
       )}
+
+      {goToPageError && (
+  <div className="go-to-page-error" role="alert">
+    {goToPageError}
+  </div>
+)}
+
     </div>
   );
 };

@@ -1,1 +1,1 @@
-export const BASE_URL = "https://expense-tracker-backend-y788.onrender.com"
+export const BASE_URL = "https://expense-tracker-backend-qa.onrender.com"
