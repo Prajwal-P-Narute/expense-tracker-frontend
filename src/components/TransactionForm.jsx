@@ -15,18 +15,19 @@ const TransactionForm = () => {
   const isContactTransactionOnLoad =
     location.state?.isContactTransaction || false;
   const isEditMode = !!editingTransaction;
+  const returnPage = location.state?.returnPage || 1;
 
   const [allCategories, setAllCategories] = useState([]);
   const [allLabels, setAllLabels] = useState([]);
   const [selectedLabelIds, setSelectedLabelIds] = useState(
-    editingTransaction?.labelIds || []
+    editingTransaction?.labelIds || [],
   );
   const [allContacts, setAllContacts] = useState([]);
   const [showContactSelect, setShowContactSelect] = useState(
-    isContactTransactionOnLoad
+    isContactTransactionOnLoad,
   );
   const [selectedContactId, setSelectedContactId] = useState(
-    editingTransaction?.contactId || ""
+    editingTransaction?.contactId || "",
   );
   const [type, setType] = useState(editingTransaction?.type || "debit");
   const [submitting, setSubmitting] = useState(false);
@@ -68,13 +69,12 @@ const TransactionForm = () => {
   }, []);
 
   useEffect(() => {
-    
     if (isEditMode && editingTransaction?.contactId) {
-    setShowContactSelect(true);
-    setSelectedContactId(editingTransaction.contactId);
-    return;
-  }
-  
+      setShowContactSelect(true);
+      setSelectedContactId(editingTransaction.contactId);
+      return;
+    }
+
     const categoryName =
       type === "debit" ? formData.debitCategory : formData.creditCategory;
     if (!categoryName) {
@@ -82,7 +82,7 @@ const TransactionForm = () => {
       return;
     }
     const category = allCategories.find(
-      (c) => c.name === categoryName && c.type === type
+      (c) => c.name === categoryName && c.type === type,
     );
 
     if (
@@ -94,7 +94,14 @@ const TransactionForm = () => {
       setShowContactSelect(false);
       setSelectedContactId(""); // Reset contact if category changes to a non-contact type
     }
-  }, [formData.debitCategory, formData.creditCategory, type, allCategories, isEditMode, editingTransaction,]);
+  }, [
+    formData.debitCategory,
+    formData.creditCategory,
+    type,
+    allCategories,
+    isEditMode,
+    editingTransaction,
+  ]);
 
   const handleTypeToggle = (selectedType) => {
     if (isEditMode && isContactTransactionOnLoad) return; // Prevent switching type when editing a contact transaction
@@ -117,7 +124,7 @@ const TransactionForm = () => {
     setSelectedLabelIds((prev) =>
       prev.includes(labelId)
         ? prev.filter((id) => id !== labelId)
-        : [...prev, labelId]
+        : [...prev, labelId],
     );
   };
 
@@ -137,7 +144,7 @@ const TransactionForm = () => {
         type === "debit" ? formData.debitCategory : formData.creditCategory,
       amount:
         parseFloat(
-          type === "debit" ? formData.debitAmount : formData.creditAmount
+          type === "debit" ? formData.debitAmount : formData.creditAmount,
         ) || 0,
       comments: formData.comments,
       labelIds: selectedLabelIds,
@@ -154,9 +161,9 @@ const TransactionForm = () => {
       }
 
       // Navigate to the correct page based on whether it was a contact transaction
-      navigate(showContactSelect ? "/manage-finances" : "/", {
-        state: { refresh: true },
-      });
+    navigate(showContactSelect ? "/manage-finances" : "/expense-tracker", {
+  state: { refresh: true, returnPage: returnPage },
+});
     } catch (error) {
       toast.error(error.message || "An error occurred.");
     } finally {
@@ -360,8 +367,8 @@ const TransactionForm = () => {
           {submitting
             ? "Saving..."
             : isEditMode
-            ? "Update Transaction"
-            : "Add Transaction"}
+              ? "Update Transaction"
+              : "Add Transaction"}
         </button>
       </form>
     </div>

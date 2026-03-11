@@ -14,8 +14,20 @@ import autoTable from "jspdf-autotable";
 import DeleteModal from "./DeleteModal";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
-import { fetchTransactions, deleteTransaction } from "../utils/transactionApi";
+import {
+  deleteTransaction,
+  fetchTransactionsPageable,
+  fetchAllTransactions,
+} from "../utils/transactionApi";
+import TransactionFilter from "./TransactionFilter";
 import { fetchWithAuth } from "../utils/apiInterceptor";
+
+const LoadingOverlay = () => (
+  <div className="loading-overlay">
+    <div className="spinner" />
+    <p>Loading transactions...</p>
+  </div>
+);
 
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
@@ -24,6 +36,9 @@ const ExpenseTracker = ({ setToken }) => {
   const [transactions, setTransactions] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const avatarBtnRef = useRef(null);
@@ -31,6 +46,17 @@ const ExpenseTracker = ({ setToken }) => {
   const [openingBalance, setOpeningBalance] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
+  const [allTransactions, setAllTransactions] = useState([]);
+  // Fetch all transactions for overall summary
+ // AFTER
+const refreshAllTransactions = useCallback(async () => {
+  const allTx = await fetchAllTransactions();
+  setAllTransactions(allTx);
+}, []);
+
+useEffect(() => {
+  refreshAllTransactions();
+}, [refreshAllTransactions]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -41,12 +67,11 @@ const ExpenseTracker = ({ setToken }) => {
   const [selectedLabel, setSelectedLabel] = useState("All");
   const [labelOptions, setLabelOptions] = useState(["All"]);
   const [userName, setUserName] = useState("");
+
   const token = localStorage.getItem("token");
   const searchInputRef = useRef(null);
   const searchPopupRef = useRef(null);
-
-
-
+// const pendingPageRef = useRef(null);
   // 🔍 Column search
   const [columnSearch, setColumnSearch] = useState({
     date: "",
@@ -68,14 +93,13 @@ const ExpenseTracker = ({ setToken }) => {
     direction: null, // "asc" | "desc"
   });
   useEffect(() => {
-  if (activeSearchColumn && searchInputRef.current) {
-    // slight delay ensures popup is rendered
-    setTimeout(() => {
-      searchInputRef.current.focus();
-    }, 0);
-  }
-}, [activeSearchColumn]);
-
+    if (activeSearchColumn && searchInputRef.current) {
+      // slight delay ensures popup is rendered
+      setTimeout(() => {
+        searchInputRef.current.focus();
+      }, 0);
+    }
+  }, [activeSearchColumn]);
 
   useEffect(() => {
     const name = localStorage.getItem("userName");
@@ -94,21 +118,20 @@ const ExpenseTracker = ({ setToken }) => {
   }, []);
 
   useEffect(() => {
-  function handleOutsideClick(event) {
-    // if search popup is open
-    if (
-      activeSearchColumn &&
-      searchPopupRef.current &&
-      !searchPopupRef.current.contains(event.target)
-    ) {
-      setActiveSearchColumn(null);
+    function handleOutsideClick(event) {
+      // if search popup is open
+      if (
+        activeSearchColumn &&
+        searchPopupRef.current &&
+        !searchPopupRef.current.contains(event.target)
+      ) {
+        setActiveSearchColumn(null);
+      }
     }
-  }
 
-  document.addEventListener("mousedown", handleOutsideClick);
-  return () => document.removeEventListener("mousedown", handleOutsideClick);
-}, [activeSearchColumn]);
-
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [activeSearchColumn]);
 
   const getColumnValue = useCallback(
     (tx, key) => {
@@ -140,22 +163,25 @@ const ExpenseTracker = ({ setToken }) => {
           return "";
       }
     },
-    [labelMap]
+    [labelMap],
   );
 
- const getSuggestions = useCallback((key, typedValue) => {
-  if (!typedValue || !Array.isArray(transactions)) return [];
+  const getSuggestions = useCallback(
+    (key, typedValue) => {
+      if (!typedValue || !Array.isArray(transactions)) return [];
 
-  return [
-    ...new Set(
-      transactions
-        .map((tx) => getColumnValue(tx, key))
-        .filter(Boolean)
-        .map((v) => v.toString())
-        .filter((v) => v.toLowerCase().includes(typedValue.toLowerCase()))
-    ),
-  ].slice(0, 8); // limit suggestions
-}, [transactions, getColumnValue]);
+      return [
+        ...new Set(
+          transactions
+            .map((tx) => getColumnValue(tx, key))
+            .filter(Boolean)
+            .map((v) => v.toString())
+            .filter((v) => v.toLowerCase().includes(typedValue.toLowerCase())),
+        ),
+      ].slice(0, 8); // limit suggestions
+    },
+    [transactions, getColumnValue],
+  );
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -167,38 +193,76 @@ const ExpenseTracker = ({ setToken }) => {
 
   // ✅ Centralized fetch helper with automatic token expiration handling
   const refreshTransactions = useCallback(async () => {
-  try {
-    const [openingBal, data] = await Promise.all([
-      fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((res) => res.json()),
-      fetchTransactions().catch(() => []), // Return empty array on error
-    ]);
-    setOpeningBalance(openingBal);
-    setTransactions(Array.isArray(data) ? data : []);
-    setCurrentPage(1);
-  } catch (err) {
-    // Token expiration is handled by apiInterceptor
-    // Only handle other errors here
-    if (!err.message.includes("Session expired")) {
-      toast.error("Failed to load transactions.");
+    setIsLoadingPage(true);
+    try {
+      const filters = {
+        category: selectedCategory,
+        startDate,
+        endDate,
+        labelId: selectedLabel,
+        search: columnSearch,
+      };
+
+      const [openingBal, pageData] = await Promise.all([
+        fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((res) => res.json()),
+        fetchTransactionsPageable(currentPage - 1, pageSize, filters), // ✅ pass filters
+      ]);
+
+      setOpeningBalance(openingBal);
+      setTransactions(pageData.content || []);
+      setTotalPages(pageData.totalPages || 0);
+    } catch (err) {
+      if (!err.message.includes("Session expired")) {
+        toast.error("Failed to load transactions.");
+      }
+      setTransactions([]);
+    } finally {
+      setIsLoadingPage(false);
+      setIsInitialLoad(false);
     }
-    // Ensure transactions is set to empty array even on error
-    setTransactions([]);
+  }, [
+    token,
+    currentPage,
+    pageSize,
+    selectedCategory,
+    startDate,
+    endDate,
+    selectedLabel,
+    columnSearch,
+  ]);
+ // AFTER
+// Replace the single combined useEffect with two separate ones:
+
+// 1. Handle navigation/auth — sets page if returning
+// WITH these two separate effects:
+
+// 1. Handle navigation/auth — sets page if returning
+useEffect(() => {
+  if (!token) {
+    navigate("/login");
+    return;
   }
-}, [token]);
 
-  useEffect(() => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-    if (location.state?.refresh) {
-      navigate(location.pathname, { replace: true, state: {} });
-    }
+  // CHECK: If we are coming back from the form
+  if (location.state?.refresh && location.state?.returnPage) {
+    const pageToRestore = location.state.returnPage;
+    
+    // Only update if it's different to avoid infinite loops
+    setCurrentPage(pageToRestore);
+    
+    // IMPORTANT: Clear the state so a manual refresh doesn't keep you "stuck"
+    navigate(location.pathname, { replace: true, state: {} });
+  }
+}, [location, navigate, token]);
+
+// Triggers data fetch whenever filters, page, or token change
+useEffect(() => {
+  if (token) {
     refreshTransactions();
-  }, [location, navigate, token, refreshTransactions]);
-
+  }
+}, [refreshTransactions, token]);
   useEffect(() => {
     // Fetch categories and labels
     const loadSupportingData = async () => {
@@ -212,8 +276,8 @@ const ExpenseTracker = ({ setToken }) => {
 
         setLabelMap(
           Object.fromEntries(
-            labels.map((l) => [l.id, { name: l.name, color: l.color }])
-          )
+            labels.map((l) => [l.id, { name: l.name, color: l.color }]),
+          ),
         );
         setLabelOptions(["All", ...labels.map((l) => l.id)]);
       } catch (error) {
@@ -223,105 +287,63 @@ const ExpenseTracker = ({ setToken }) => {
       }
     };
     loadSupportingData();
-  }, [location.key]);
+  }, [location.key, token]);
+  
 
   const filteredTransactions = useMemo(() => {
     let data = Array.isArray(transactions) ? [...transactions] : [];
-    // existing filters (UNCHANGED)
-    if (selectedCategory !== "All") {
-      data = data.filter((t) => t.category === selectedCategory);
-    }
 
-    if (startDate) {
-      data = data.filter((t) => new Date(t.date) >= new Date(startDate));
-    }
+    // ✅ REMOVE category, date, label filters — now handled server-side
 
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      data = data.filter((t) => new Date(t.date) <= end);
-    }
-
-    if (selectedLabel !== "All") {
-      data = data.filter(
-        (t) => Array.isArray(t.labelIds) && t.labelIds.includes(selectedLabel)
-      );
-    }
-
-    // 🔍 COLUMN SEARCH FILTER
+    // Keep column search (for within-page refinement)
     Object.entries(columnSearch).forEach(([key, value]) => {
-  if (!value) return;
+      if (!value) return;
+      data = data.filter((tx) => {
+        if (key === "debit" && tx.type !== "debit") return false;
+        if (key === "credit" && tx.type !== "credit") return false;
+        const rawValue = getColumnValue(tx, key);
+        if (rawValue == null) return false;
+        const cellValue = rawValue.toString().toLowerCase();
+        const searchValue = value.toLowerCase();
+        if (exactMatchColumns[key]) return cellValue === searchValue;
+        return cellValue.includes(searchValue);
+      });
+    });
 
-  data = data.filter((tx) => {
-    // 🚫 enforce correct transaction type
-    if (key === "debit" && tx.type !== "debit") return false;
-    if (key === "credit" && tx.type !== "credit") return false;
-
-    const rawValue = getColumnValue(tx, key);
-    if (rawValue == null) return false;
-
-    const cellValue = rawValue.toString().toLowerCase();
-    const searchValue = value.toLowerCase();
-
-    // exact match from suggestion
-    if (exactMatchColumns[key]) {
-      return cellValue === searchValue;
-    }
-
-    return cellValue.includes(searchValue);
-  });
-});
-
-
-    // ▲▼ SORTING (ONLY FILTER VIEW – NO CALC IMPACT)
+    // Keep sorting
     if (sortConfig.key) {
-  data.sort((a, b) => {
-    const { key, direction } = sortConfig;
-
-    // 🔴 DEBIT SORT
-    if (key === "debit") {
-      if (a.type !== "debit" && b.type !== "debit") return 0;
-      if (a.type !== "debit") return 1;
-      if (b.type !== "debit") return -1;
-
-      return direction === "asc"
-        ? a.amount - b.amount
-        : b.amount - a.amount;
+      data.sort((a, b) => {
+        const { key, direction } = sortConfig;
+        if (key === "debit") {
+          if (a.type !== "debit" && b.type !== "debit") return 0;
+          if (a.type !== "debit") return 1;
+          if (b.type !== "debit") return -1;
+          return direction === "asc"
+            ? a.amount - b.amount
+            : b.amount - a.amount;
+        }
+        if (key === "credit") {
+          if (a.type !== "credit" && b.type !== "credit") return 0;
+          if (a.type !== "credit") return 1;
+          if (b.type !== "credit") return -1;
+          return direction === "asc"
+            ? a.amount - b.amount
+            : b.amount - a.amount;
+        }
+        const A = getColumnValue(a, key);
+        const B = getColumnValue(b, key);
+        if (A == null && B == null) return 0;
+        if (A == null) return 1;
+        if (B == null) return -1;
+        if (A < B) return direction === "asc" ? -1 : 1;
+        if (A > B) return direction === "asc" ? 1 : -1;
+        return 0;
+      });
     }
-
-    // 🟢 CREDIT SORT
-    if (key === "credit") {
-      if (a.type !== "credit" && b.type !== "credit") return 0;
-      if (a.type !== "credit") return 1;
-      if (b.type !== "credit") return -1;
-
-      return direction === "asc"
-        ? a.amount - b.amount
-        : b.amount - a.amount;
-    }
-
-    // 🟡 OTHER COLUMNS (existing behavior)
-    const A = getColumnValue(a, key);
-    const B = getColumnValue(b, key);
-
-    if (A == null && B == null) return 0;
-    if (A == null) return 1;
-    if (B == null) return -1;
-
-    if (A < B) return direction === "asc" ? -1 : 1;
-    if (A > B) return direction === "asc" ? 1 : -1;
-    return 0;
-  });
-}
-
 
     return data;
   }, [
     transactions,
-    selectedCategory,
-    startDate,
-    endDate,
-    selectedLabel,
     columnSearch,
     exactMatchColumns,
     sortConfig,
@@ -332,23 +354,20 @@ const ExpenseTracker = ({ setToken }) => {
     setSortConfig({ key, direction });
   };
 
-  const currentItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredTransactions.slice(start, start + pageSize);
-  }, [filteredTransactions, currentPage, pageSize]);
+  const currentItems = filteredTransactions;
 
   useEffect(() => {
-    const { income, expense } = filteredTransactions.reduce(
+    const { income, expense } = allTransactions.reduce(
       (acc, tx) => {
         if (tx.type === "credit") acc.income += tx.amount;
         if (tx.type === "debit") acc.expense += tx.amount;
         return acc;
       },
-      { income: 0, expense: 0 }
+      { income: 0, expense: 0 },
     );
     setTotalIncome(income);
     setTotalExpense(expense);
-  }, [filteredTransactions]);
+  }, [allTransactions]);
 
   useEffect(() => {
     const now = new Date();
@@ -383,20 +402,26 @@ const ExpenseTracker = ({ setToken }) => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!transactionToDelete) return;
-    try {
-      await deleteTransaction(transactionToDelete);
-      toast.success("Transaction deleted successfully");
-      await refreshTransactions();
-    } catch (err) {
-      if (!err.message.includes("Session expired")) {
-        toast.error("Error deleting transaction");
-      }
-    } finally {
-      setShowDeleteModal(false);
-      setTransactionToDelete(null);
+  if (!transactionToDelete) return;
+  try {
+    await deleteTransaction(transactionToDelete);
+    toast.success("Transaction deleted successfully");
+
+    // ✅ Both functions already set their own state internally — just call them
+    await Promise.all([
+      refreshAllTransactions(),
+      refreshTransactions(),
+    ]);
+
+  } catch (err) {
+    if (!err.message.includes("Session expired")) {
+      toast.error("Error deleting transaction");
     }
-  };
+  } finally {
+    setShowDeleteModal(false);
+    setTransactionToDelete(null);
+  }
+};
 
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
@@ -418,19 +443,31 @@ const ExpenseTracker = ({ setToken }) => {
     setCurrentPage(1);
   };
 
-  const finalBalance =
-    transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
+  const finalBalance = useMemo(() => {
+    if (allTransactions.length === 0) return 0;
+    // Find the transaction with the latest date from all transactions
+    let latestTx = allTransactions[0];
+    for (let tx of allTransactions) {
+      if (new Date(tx.date) > new Date(latestTx.date)) {
+        latestTx = tx;
+      }
+    }
+    return latestTx.runningBalance;
+  }, [allTransactions]);
 
   const handleExportPDF = () => {
     const doc = new jsPDF();
 
     // --- 1. NEW Naming Convention Logic ---
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-    const timeStr = now.getHours().toString().padStart(2, '0') + "-" + 
-                    now.getMinutes().toString().padStart(2, '0') + "-" + 
-                    now.getSeconds().toString().padStart(2, '0'); // HH-MM-SS
-    
+    const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const timeStr =
+      now.getHours().toString().padStart(2, "0") +
+      "-" +
+      now.getMinutes().toString().padStart(2, "0") +
+      "-" +
+      now.getSeconds().toString().padStart(2, "0"); // HH-MM-SS
+
     // Result: ExpenseReport_Prajwal_Narute_2025-12-21_11-45-30.pdf
     const fileName = `ExpenseReport_${userName.replace(/\s+/g, "_")}_${dateStr}_${timeStr}.pdf`;
     doc.setFillColor(245, 247, 250);
@@ -554,7 +591,7 @@ const ExpenseTracker = ({ setToken }) => {
       doc.text(
         " No transactions match the selected filters.",
         14,
-        doc.lastAutoTable.finalY + 18
+        doc.lastAutoTable.finalY + 18,
       );
     } else {
       autoTable(doc, {
@@ -588,7 +625,7 @@ const ExpenseTracker = ({ setToken }) => {
       ` Report Date: ${new Date().toLocaleString()}`,
       200,
       pageHeight - 10,
-      { align: "right" }
+      { align: "right" },
     );
 
     doc.save(fileName);
@@ -596,6 +633,7 @@ const ExpenseTracker = ({ setToken }) => {
 
   return (
     <>
+      {isInitialLoad && <LoadingOverlay />}
       <div className="container">
         {/* Header */}
         <div className="header">
@@ -605,7 +643,11 @@ const ExpenseTracker = ({ setToken }) => {
             <div className="button-group">
               <button
                 className="add-btn"
-                onClick={() => navigate("/add-transaction")}
+                onClick={() =>
+                  navigate("/add-transaction", {
+                    state: { returnPage: currentPage },
+                  })
+                }
               >
                 + Add Entry
               </button>
@@ -743,77 +785,22 @@ const ExpenseTracker = ({ setToken }) => {
         </div>
 
         {/* Filter Section */}
-        {filterOpen && (
-          <div className="date-filter">
-            <label>
-              Category:
-              <select
-                value={selectedCategory}
-                onChange={(e) => {
-                  setSelectedCategory(e.target.value);
-                  setCurrentPage(1);
-                }}
-              >
-                {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Start Date:
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                max={endDate || undefined}
-              />
-            </label>
-
-            <label>
-              End Date:
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                min={startDate || undefined}
-              />
-            </label>
-
-            <label>
-              Label:
-              <select
-                value={selectedLabel}
-                onChange={(e) => {
-                  setSelectedLabel(e.target.value);
-                  setCurrentPage(1);
-                }}
-              >
-                {labelOptions.map((l) =>
-                  l === "All" ? (
-                    <option key="All" value="All">
-                      All
-                    </option>
-                  ) : (
-                    <option key={l} value={l}>
-                      {labelMap[l]?.name || "Unknown"}
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
-
-            <button onClick={resetFilters}>Reset</button>
-          </div>
-        )}
+        <TransactionFilter
+          filterOpen={filterOpen}
+          categoryOptions={categoryOptions}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
+          labelOptions={labelOptions}
+          selectedLabel={selectedLabel}
+          setSelectedLabel={setSelectedLabel}
+          resetFilters={resetFilters}
+          setCurrentPage={setCurrentPage}
+          labelMap={labelMap}
+        />
 
         {/* Summary Section */}
         <div className="summary-section">
@@ -851,7 +838,35 @@ const ExpenseTracker = ({ setToken }) => {
 
         {/* Transactions table */}
         <div className="table-wrapper">
-          <h2 className="month-heading">Transactions</h2>
+          <h2 className="month-heading">
+            Transactions
+            {isLoadingPage && !isInitialLoad && (
+              <span
+                style={{
+                  marginLeft: "10px",
+                  fontSize: "13px",
+                  color: "#3f51b5",
+                  fontWeight: 400,
+                  verticalAlign: "middle",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 14,
+                    height: 14,
+                    border: "2px solid #c7d2fe",
+                    borderTop: "2px solid #3f51b5",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                    marginRight: 6,
+                    verticalAlign: "middle",
+                  }}
+                />
+                Loading...
+              </span>
+            )}
+          </h2>
           <table>
             <thead>
               <tr>
@@ -862,7 +877,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "date" ? null : "date"
+                          activeSearchColumn === "date" ? null : "date",
                         )
                       }
                     />
@@ -888,7 +903,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "date" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search date..."
                         value={columnSearch.date}
                         onChange={(e) =>
@@ -929,7 +944,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "category" ? null : "category"
+                          activeSearchColumn === "category" ? null : "category",
                         )
                       }
                     />
@@ -958,7 +973,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "category" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search category..."
                         value={columnSearch.category}
                         onChange={(e) =>
@@ -989,7 +1004,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1003,7 +1018,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "comments" ? null : "comments"
+                          activeSearchColumn === "comments" ? null : "comments",
                         )
                       }
                     />
@@ -1029,7 +1044,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "comments" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search comments..."
                         value={columnSearch.comments}
                         onChange={(e) =>
@@ -1060,7 +1075,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1074,7 +1089,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "label" ? null : "label"
+                          activeSearchColumn === "label" ? null : "label",
                         )
                       }
                     />
@@ -1100,7 +1115,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "label" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search label..."
                         value={columnSearch.label}
                         onChange={(e) => {
@@ -1134,7 +1149,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1148,7 +1163,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "debit" ? null : "debit"
+                          activeSearchColumn === "debit" ? null : "debit",
                         )
                       }
                     />
@@ -1174,7 +1189,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "debit" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search debit..."
                         value={columnSearch.debit}
                         onChange={(e) => {
@@ -1201,7 +1216,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1215,7 +1230,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "credit" ? null : "credit"
+                          activeSearchColumn === "credit" ? null : "credit",
                         )
                       }
                     />
@@ -1241,7 +1256,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "credit" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search credit..."
                         value={columnSearch.credit}
                         onChange={(e) => {
@@ -1271,7 +1286,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1285,7 +1300,7 @@ const ExpenseTracker = ({ setToken }) => {
                       className="fas fa-search"
                       onClick={() =>
                         setActiveSearchColumn(
-                          activeSearchColumn === "balance" ? null : "balance"
+                          activeSearchColumn === "balance" ? null : "balance",
                         )
                       }
                     />
@@ -1311,7 +1326,7 @@ const ExpenseTracker = ({ setToken }) => {
                   {activeSearchColumn === "balance" && (
                     <div className="search-popup" ref={searchPopupRef}>
                       <input
-                      ref={searchInputRef}
+                        ref={searchInputRef}
                         placeholder="Search balance..."
                         value={columnSearch.balance}
                         onChange={(e) => {
@@ -1344,7 +1359,7 @@ const ExpenseTracker = ({ setToken }) => {
                             >
                               {s}
                             </li>
-                          )
+                          ),
                         )}
                       </ul>
                     </div>
@@ -1355,7 +1370,22 @@ const ExpenseTracker = ({ setToken }) => {
               </tr>
             </thead>
             <tbody>
-              {currentItems.length > 0 ? (
+              {isLoadingPage ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} style={{ padding: "14px 12px" }}>
+                        <div
+                          className="skeleton-cell"
+                          style={{
+                            width: j === 2 ? "75%" : j === 7 ? "55%" : "65%",
+                          }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : currentItems.length > 0 ? (
                 currentItems.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDate(entry.date)}</td>
@@ -1431,6 +1461,7 @@ const ExpenseTracker = ({ setToken }) => {
                             state: {
                               transaction: entry,
                               isContactTransaction: !!entry.contactId,
+                              returnPage: currentPage, // ✅ preserve page on edit too
                             },
                           })
                         }
@@ -1468,35 +1499,25 @@ const ExpenseTracker = ({ setToken }) => {
         <div className="pagination">
           <button
             onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            disabled={currentPage === 1}
+            disabled={currentPage === 1 || isLoadingPage}
           >
             ← Previous
           </button>
           <span>
-            Page {currentPage} of{" "}
-            {Math.ceil(filteredTransactions.length / pageSize)}
+            Page {currentPage} of {totalPages || 1}
           </span>
           <button
-            onClick={() =>
-              setCurrentPage((p) =>
-                Math.min(
-                  p + 1,
-                  Math.ceil(filteredTransactions.length / pageSize)
-                )
-              )
-            }
-            disabled={
-              currentPage === Math.ceil(filteredTransactions.length / pageSize)
-            }
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            disabled={currentPage >= totalPages || isLoadingPage}
           >
             Next →
           </button>
         </div>
 
         {/* Footer summary */}
-       <div className="footer">
-          <button 
-            className="export-pdf-fab" 
+        <div className="footer">
+          <button
+            className="export-pdf-fab"
             onClick={handleExportPDF}
             title="Export to PDF"
           >

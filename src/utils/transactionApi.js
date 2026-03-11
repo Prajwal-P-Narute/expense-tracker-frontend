@@ -8,6 +8,49 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
+
+// ✅ NEW: Fetch paginated transactions (recommended for consistent balance display)
+export async function fetchTransactionsPageable(page = 0, pageSize = 15, filters = {}) {
+  try {
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('size', pageSize);
+
+    // ✅ Send filters to backend
+    if (filters.category && filters.category !== "All") {
+      params.append('category', filters.category);
+    }
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    if (filters.labelId && filters.labelId !== "All") {
+      params.append('labelId', filters.labelId);
+    }
+    // Column search params
+    if (filters.search?.date)     params.append('date', filters.search.date);
+    if (filters.search?.category) params.append('categorySearch', filters.search.category);
+    if (filters.search?.comments) params.append('comments', filters.search.comments);
+    if (filters.search?.label)    params.append('labelSearch', filters.search.label);
+
+    const res = await fetchWithAuth(
+      `${BASE_URL}/api/transactions?${params.toString()}`,
+      { headers: authHeaders() }
+    );
+
+    if (!res.ok) {
+      console.error("Failed to load transactions, status:", res.status);
+      return { content: [], totalElements: 0, totalPages: 0 };
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching paginated transactions:", error);
+    return { content: [], totalElements: 0, totalPages: 0 };
+  }
+}
+
 export async function fetchTransactions() {
   try {
     // Use fetchAllTransactions to get ALL transactions
