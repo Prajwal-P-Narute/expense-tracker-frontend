@@ -1,24 +1,24 @@
+// src/utils/labelApi.js
 import { BASE_URL } from "./api";
+import { fetchWithAuth } from "./apiInterceptor";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
-  Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ fixed
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
-
 export async function fetchLabels() {
-  const res = await fetch(`${BASE_URL}/api/labels`, { headers: authHeaders() });
+  const res = await fetchWithAuth(`${BASE_URL}/api/labels`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch labels");
   return res.json();
 }
 
 export async function createLabel(payload) {
-  const res = await fetch(`${BASE_URL}/api/labels`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/labels`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-
   if (res.status === 409) {
     const msg = await res.text();
     throw new Error(msg || "Label already exists");
@@ -28,7 +28,7 @@ export async function createLabel(payload) {
 }
 
 export async function updateLabel(id, payload) {
-  const res = await fetch(`${BASE_URL}/api/labels/${id}`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/labels/${id}`, {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -38,15 +38,15 @@ export async function updateLabel(id, payload) {
 }
 
 export async function labelUsage(id) {
-  const res = await fetch(`${BASE_URL}/api/labels/${id}/usage`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/labels/${id}/usage`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch label usage");
-  return res.json(); // number
+  return res.json();
 }
 
 export async function labelUsageAll() {
-  const res = await fetch(`${BASE_URL}/api/labels/usage`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/labels/usage`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch label usage");
@@ -56,10 +56,10 @@ export async function labelUsageAll() {
 export async function deleteLabel(id, transferTo) {
   const url = new URL(`${BASE_URL}/api/labels/${id}`);
   if (transferTo) url.searchParams.set("transferTo", transferTo);
-  const res = await fetch(url.toString(), {
+  const res = await fetchWithAuth(url.toString(), {
     method: "DELETE",
     headers: authHeaders(),
   });
   if (!res.ok && res.status !== 204) throw new Error("Failed to delete label");
-  return true; // 204 is success with no body
+  return true;
 }

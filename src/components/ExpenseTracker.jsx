@@ -17,10 +17,25 @@ import { fetchLabels } from "../utils/labelApi";
 import {
   deleteTransaction,
   fetchTransactionsPageable,
-  fetchAllTransactions,
+  fetchFilteredSummary,
 } from "../utils/transactionApi";
 import TransactionFilter from "./TransactionFilter";
 import { fetchWithAuth } from "../utils/apiInterceptor";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 15;
+
+const EMPTY_SEARCH = {
+  date: "",
+  category: "",
+  comments: "",
+  label: "",
+  debit: "",
+  credit: "",
+  balance: "",
+};
 
 const LoadingOverlay = () => (
   <div className="loading-overlay">
@@ -29,349 +44,214 @@ const LoadingOverlay = () => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 const ExpenseTracker = ({ setToken }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const token = localStorage.getItem("token");
 
+  // ── Data ──────────────────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [isLoadingPage, setIsLoadingPage] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-  const avatarBtnRef = useRef(null);
-  const pageSize = 15;
   const [openingBalance, setOpeningBalance] = useState(0);
+
+  // ── Summary (now driven by filtered data from server) ─────────────────────
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
-  const [allTransactions, setAllTransactions] = useState([]);
-  // Fetch all transactions for overall summary
- // AFTER
-const refreshAllTransactions = useCallback(async () => {
-  const allTx = await fetchAllTransactions();
-  setAllTransactions(allTx);
-}, []);
+  const [finalBalance, setFinalBalance] = useState(0);
 
-useEffect(() => {
-  refreshAllTransactions();
-}, [refreshAllTransactions]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+
+  // ── Loading ───────────────────────────────────────────────────────────────
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // ── UI ────────────────────────────────────────────────────────────────────
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
-  const [categoryOptions, setCategoryOptions] = useState(["All"]);
-  const [labelMap, setLabelMap] = useState({});
-  const [selectedLabel, setSelectedLabel] = useState("All");
-  const [labelOptions, setLabelOptions] = useState(["All"]);
   const [userName, setUserName] = useState("");
-
-  const token = localStorage.getItem("token");
-  const searchInputRef = useRef(null);
-  const searchPopupRef = useRef(null);
-// const pendingPageRef = useRef(null);
-  // 🔍 Column search
-  const [columnSearch, setColumnSearch] = useState({
-    date: "",
-    category: "",
-    comments: "",
-    label: "",
-    debit: "",
-    credit: "",
-    balance: "",
-  });
-  const [exactMatchColumns, setExactMatchColumns] = useState({});
-
-  // which column search popup is open
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
 
-  // ▲▼ Sorting
+  // ── Filters (dropdown / date-range) ──────────────────────────────────────
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState("All");
+
+  // ── Column search (ALL server-side) ──────────────────────────────────────
+  const [columnSearch, setColumnSearch] = useState(EMPTY_SEARCH);
+
+  // ── Sort (server-side) ────────────────────────────────────────────────────
   const [sortConfig, setSortConfig] = useState({
-    key: null, // column key
-    direction: null, // "asc" | "desc"
+    key: null,
+    direction: "desc",
   });
-  useEffect(() => {
-    if (activeSearchColumn && searchInputRef.current) {
-      // slight delay ensures popup is rendered
-      setTimeout(() => {
-        searchInputRef.current.focus();
-      }, 0);
-    }
-  }, [activeSearchColumn]);
 
-  useEffect(() => {
-    const name = localStorage.getItem("userName");
-    if (name) setUserName(name);
-  }, []);
+  // ── Supporting data ───────────────────────────────────────────────────────
+  const [categoryOptions, setCategoryOptions] = useState(["All"]);
+  const [labelMap, setLabelMap] = useState({});
+  const [labelOptions, setLabelOptions] = useState(["All"]);
 
-  // close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchPopupRef = useRef(null);
 
-  useEffect(() => {
-    function handleOutsideClick(event) {
-      // if search popup is open
-      if (
-        activeSearchColumn &&
-        searchPopupRef.current &&
-        !searchPopupRef.current.contains(event.target)
-      ) {
-        setActiveSearchColumn(null);
-      }
-    }
+  // ─────────────────────────────────────────────────────────────────────────
+  // FETCH TRIGGER PATTERN
+  // ─────────────────────────────────────────────────────────────────────────
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+  const filtersRef = useRef({});
 
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [activeSearchColumn]);
-
-  const getColumnValue = useCallback(
-    (tx, key) => {
-      switch (key) {
-        case "date":
-          return tx.date || "";
-
-        case "category":
-          return tx.category || "";
-
-        case "comments":
-          return tx.comments || "";
-
-        case "label":
-          return Array.isArray(tx.labelIds)
-            ? tx.labelIds.map((id) => labelMap[id]?.name).join(", ")
-            : "";
-
-        case "debit":
-          return tx.type === "debit" ? String(tx.amount) : null;
-
-        case "credit":
-          return tx.type === "credit" ? String(tx.amount) : null;
-
-        case "balance":
-          return String(tx.runningBalance ?? "");
-
-        default:
-          return "";
-      }
+  const snapshotFilters = useCallback(
+    (overrides = {}) => {
+      filtersRef.current = {
+        selectedCategory,
+        startDate,
+        endDate,
+        selectedLabel,
+        columnSearch,
+        sortConfig,
+        currentPage,
+        ...overrides,
+      };
     },
-    [labelMap],
+    [
+      selectedCategory,
+      startDate,
+      endDate,
+      selectedLabel,
+      columnSearch,
+      sortConfig,
+      currentPage,
+    ],
   );
 
-  const getSuggestions = useCallback(
-    (key, typedValue) => {
-      if (!typedValue || !Array.isArray(transactions)) return [];
+  // const triggerFetch = useCallback(
+  //   (overrides = {}, resetPage = false) => {
+  //     const pg = resetPage ? 1 : (overrides.currentPage ?? currentPage);
+  //     snapshotFilters({ ...overrides, currentPage: pg });
+  //     if (resetPage) setCurrentPage(1);
+  //     setFetchTrigger((t) => t + 1);
+  //   },
+  //   [snapshotFilters, currentPage],
+  // );
 
-      return [
-        ...new Set(
-          transactions
-            .map((tx) => getColumnValue(tx, key))
-            .filter(Boolean)
-            .map((v) => v.toString())
-            .filter((v) => v.toLowerCase().includes(typedValue.toLowerCase())),
-        ),
-      ].slice(0, 8); // limit suggestions
-    },
-    [transactions, getColumnValue],
-  );
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "";
-    const parts = dateString.split("-");
-    if (parts.length !== 3) return dateString;
-    const [year, month, day] = parts;
-    return `${day}/${month}/${year}`;
-  };
-
-  // ✅ Centralized fetch helper with automatic token expiration handling
-  const refreshTransactions = useCallback(async () => {
+  const doFetch = useCallback(async () => {
+    const f = filtersRef.current;
     setIsLoadingPage(true);
     try {
       const filters = {
-        category: selectedCategory,
-        startDate,
-        endDate,
-        labelId: selectedLabel,
-        search: columnSearch,
+        category: f.selectedCategory,
+        startDate: f.startDate,
+        endDate: f.endDate,
+        labelId: f.selectedLabel,
+        search: f.columnSearch,
+        sortBy: f.sortConfig?.key || null,
+        sortDir: f.sortConfig?.direction || "desc",
       };
 
-      const [openingBal, pageData] = await Promise.all([
+      // Fetch page data, opening balance, AND filtered summary in parallel
+      const [openingBal, pageData, summary] = await Promise.all([
         fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
           headers: { Authorization: `Bearer ${token}` },
-        }).then((res) => res.json()),
-        fetchTransactionsPageable(currentPage - 1, pageSize, filters), // ✅ pass filters
+        }).then((r) => r.json()),
+        fetchTransactionsPageable(
+          Math.max(0, (Number(f.currentPage) || 1) - 1),
+          PAGE_SIZE,
+          filters,
+        ),
+        fetchFilteredSummary(filters),
       ]);
 
       setOpeningBalance(openingBal);
       setTransactions(pageData.content || []);
       setTotalPages(pageData.totalPages || 0);
+
+      // Update summary cards with filtered totals
+      setTotalIncome(summary.totalIncome ?? 0);
+      setTotalExpense(summary.totalExpense ?? 0);
+      setFinalBalance(summary.finalBalance ?? 0);
     } catch (err) {
-      if (!err.message.includes("Session expired")) {
+      if (!err.message?.includes("Session expired"))
         toast.error("Failed to load transactions.");
-      }
       setTransactions([]);
     } finally {
       setIsLoadingPage(false);
       setIsInitialLoad(false);
     }
-  }, [
-    token,
-    currentPage,
-    pageSize,
-    selectedCategory,
-    startDate,
-    endDate,
-    selectedLabel,
-    columnSearch,
-  ]);
- // AFTER
-// Replace the single combined useEffect with two separate ones:
+  }, [token]);
 
-// 1. Handle navigation/auth — sets page if returning
-// WITH these two separate effects:
-
-// 1. Handle navigation/auth — sets page if returning
-useEffect(() => {
-  if (!token) {
-    navigate("/login");
-    return;
-  }
-
-  // CHECK: If we are coming back from the form
-  if (location.state?.refresh && location.state?.returnPage) {
-    const pageToRestore = location.state.returnPage;
-    
-    // Only update if it's different to avoid infinite loops
-    setCurrentPage(pageToRestore);
-    
-    // IMPORTANT: Clear the state so a manual refresh doesn't keep you "stuck"
-    navigate(location.pathname, { replace: true, state: {} });
-  }
-}, [location, navigate, token]);
-
-// Triggers data fetch whenever filters, page, or token change
-useEffect(() => {
-  if (token) {
-    refreshTransactions();
-  }
-}, [refreshTransactions, token]);
   useEffect(() => {
-    // Fetch categories and labels
-    const loadSupportingData = async () => {
+    if (token) doFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchTrigger]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // AUTH + initial load
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    if (location.state?.refresh && location.state?.returnPage) {
+      const pg = location.state.returnPage;
+      navigate(location.pathname, { replace: true, state: {} });
+      setCurrentPage(pg);
+      snapshotFilters({ currentPage: pg });
+    } else {
+      snapshotFilters({ currentPage: 1 });
+    }
+    setFetchTrigger((t) => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Supporting data
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
       try {
         const [cats, labels] = await Promise.all([
           fetchCategories(),
           fetchLabels(),
         ]);
-        const catNames = Array.from(new Set(cats.map((c) => c.name)));
-        setCategoryOptions(["All", ...catNames]);
-
+        setCategoryOptions([
+          "All",
+          ...Array.from(new Set(cats.map((c) => c.name))),
+        ]);
         setLabelMap(
           Object.fromEntries(
             labels.map((l) => [l.id, { name: l.name, color: l.color }]),
           ),
         );
         setLabelOptions(["All", ...labels.map((l) => l.id)]);
-      } catch (error) {
-        if (!error.message.includes("Session expired")) {
+      } catch (e) {
+        if (!e.message?.includes("Session expired"))
           toast.error("Failed to load categories or labels.");
-        }
       }
     };
-    loadSupportingData();
+    load();
   }, [location.key, token]);
-  
 
-  const filteredTransactions = useMemo(() => {
-    let data = Array.isArray(transactions) ? [...transactions] : [];
-
-    // ✅ REMOVE category, date, label filters — now handled server-side
-
-    // Keep column search (for within-page refinement)
-    Object.entries(columnSearch).forEach(([key, value]) => {
-      if (!value) return;
-      data = data.filter((tx) => {
-        if (key === "debit" && tx.type !== "debit") return false;
-        if (key === "credit" && tx.type !== "credit") return false;
-        const rawValue = getColumnValue(tx, key);
-        if (rawValue == null) return false;
-        const cellValue = rawValue.toString().toLowerCase();
-        const searchValue = value.toLowerCase();
-        if (exactMatchColumns[key]) return cellValue === searchValue;
-        return cellValue.includes(searchValue);
-      });
-    });
-
-    // Keep sorting
-    if (sortConfig.key) {
-      data.sort((a, b) => {
-        const { key, direction } = sortConfig;
-        if (key === "debit") {
-          if (a.type !== "debit" && b.type !== "debit") return 0;
-          if (a.type !== "debit") return 1;
-          if (b.type !== "debit") return -1;
-          return direction === "asc"
-            ? a.amount - b.amount
-            : b.amount - a.amount;
-        }
-        if (key === "credit") {
-          if (a.type !== "credit" && b.type !== "credit") return 0;
-          if (a.type !== "credit") return 1;
-          if (b.type !== "credit") return -1;
-          return direction === "asc"
-            ? a.amount - b.amount
-            : b.amount - a.amount;
-        }
-        const A = getColumnValue(a, key);
-        const B = getColumnValue(b, key);
-        if (A == null && B == null) return 0;
-        if (A == null) return 1;
-        if (B == null) return -1;
-        if (A < B) return direction === "asc" ? -1 : 1;
-        if (A > B) return direction === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return data;
-  }, [
-    transactions,
-    columnSearch,
-    exactMatchColumns,
-    sortConfig,
-    getColumnValue,
-  ]);
-
-  const handleSort = (key, direction) => {
-    setSortConfig({ key, direction });
-  };
-
-  const currentItems = filteredTransactions;
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // Misc UI effects
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const { income, expense } = allTransactions.reduce(
-      (acc, tx) => {
-        if (tx.type === "credit") acc.income += tx.amount;
-        if (tx.type === "debit") acc.expense += tx.amount;
-        return acc;
-      },
-      { income: 0, expense: 0 },
-    );
-    setTotalIncome(income);
-    setTotalExpense(expense);
-  }, [allTransactions]);
+    const name = localStorage.getItem("userName");
+    if (name) setUserName(name);
+  }, []);
 
   useEffect(() => {
     const now = new Date();
-    const monthsArr = [
+    const months = [
       "January",
       "February",
       "March",
@@ -387,11 +267,155 @@ useEffect(() => {
     ];
     const el = document.getElementById("currentDate");
     if (el)
-      el.textContent = `${now.getDate()} ${
-        monthsArr[now.getMonth()]
-      } ${now.getFullYear()}`;
+      el.textContent = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   }, []);
 
+  useEffect(() => {
+    if (activeSearchColumn && searchInputRef.current)
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, [activeSearchColumn]);
+
+  useEffect(() => {
+    const h = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target))
+        setDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  useEffect(() => {
+    const h = (e) => {
+      if (
+        activeSearchColumn &&
+        searchPopupRef.current &&
+        !searchPopupRef.current.contains(e.target)
+      )
+        setActiveSearchColumn(null);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [activeSearchColumn]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers — check if any filter/search is currently active
+  // ─────────────────────────────────────────────────────────────────────────
+  const hasActiveFilters = useMemo(() => {
+    const hasColumnSearch = Object.values(columnSearch).some(
+      (v) => v.trim() !== "",
+    );
+    return (
+      selectedCategory !== "All" ||
+      startDate !== "" ||
+      endDate !== "" ||
+      selectedLabel !== "All" ||
+      hasColumnSearch
+    );
+  }, [selectedCategory, startDate, endDate, selectedLabel, columnSearch]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Filter / search / sort change handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleFilterChange = (setter, key, value) => {
+    setter(value);
+    const override = { [key]: value, currentPage: 1 };
+    snapshotFilters(override);
+    setCurrentPage(1);
+    setFetchTrigger((t) => t + 1);
+  };
+
+  const handleColumnSearchChange = (key, value) => {
+    const newCS = { ...columnSearch, [key]: value };
+    setColumnSearch(newCS);
+    snapshotFilters({ columnSearch: newCS, currentPage: 1 });
+    setCurrentPage(1);
+    setFetchTrigger((t) => t + 1);
+  };
+
+  const applyColumnSuggestion = (key, value) => {
+    const newCS = { ...columnSearch, [key]: value };
+    setColumnSearch(newCS);
+    setActiveSearchColumn(null);
+    snapshotFilters({ columnSearch: newCS, currentPage: 1 });
+    setCurrentPage(1);
+    setFetchTrigger((t) => t + 1);
+  };
+
+  const handleSort = (key, direction) => {
+    const newSort = { key, direction };
+    setSortConfig(newSort);
+    snapshotFilters({ sortConfig: newSort, currentPage: 1 });
+    setCurrentPage(1);
+    setFetchTrigger((t) => t + 1);
+  };
+
+  const handlePageChange = (newPage) => {
+    const safePage = Number.isFinite(Number(newPage))
+      ? Math.max(1, Math.floor(Number(newPage)))
+      : 1;
+    setCurrentPage(safePage);
+    snapshotFilters({ currentPage: safePage });
+    setFetchTrigger((t) => t + 1);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Suggestions (from current page — autocomplete)
+  // ─────────────────────────────────────────────────────────────────────────
+  const getColumnValue = useCallback(
+    (tx, key) => {
+      switch (key) {
+        case "date":
+          return tx.date || "";
+        case "category":
+          return tx.category || "";
+        case "comments":
+          return tx.comments || "";
+        case "label":
+          return Array.isArray(tx.labelIds)
+            ? tx.labelIds
+                .map((id) => labelMap[id]?.name)
+                .filter(Boolean)
+                .join(", ")
+            : "";
+        case "debit":
+          return tx.type === "debit" ? String(tx.amount) : null;
+        case "credit":
+          return tx.type === "credit" ? String(tx.amount) : null;
+        case "balance":
+          return String(tx.runningBalance ?? "");
+        default:
+          return "";
+      }
+    },
+    [labelMap],
+  );
+
+  const getSuggestions = useCallback(
+    (key, typed) => {
+      if (!typed || !Array.isArray(transactions)) return [];
+      return [
+        ...new Set(
+          transactions
+            .map((tx) => getColumnValue(tx, key))
+            .filter(Boolean)
+            .map((v) => v.toString())
+            .filter((v) => v.toLowerCase().includes(typed.toLowerCase())),
+        ),
+      ].slice(0, 8);
+    },
+    [transactions, getColumnValue],
+  );
+
+  const formatDate = (d) => {
+    if (!d) return "";
+    const [y, m, day] = d.split("-");
+    return `${day}/${m}/${y}`;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────────────────────────────────────
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userName");
@@ -402,26 +426,19 @@ useEffect(() => {
   };
 
   const handleConfirmDelete = async () => {
-  if (!transactionToDelete) return;
-  try {
-    await deleteTransaction(transactionToDelete);
-    toast.success("Transaction deleted successfully");
-
-    // ✅ Both functions already set their own state internally — just call them
-    await Promise.all([
-      refreshAllTransactions(),
-      refreshTransactions(),
-    ]);
-
-  } catch (err) {
-    if (!err.message.includes("Session expired")) {
-      toast.error("Error deleting transaction");
+    if (!transactionToDelete) return;
+    try {
+      await deleteTransaction(transactionToDelete);
+      toast.success("Transaction deleted successfully");
+      await doFetch();
+    } catch (err) {
+      if (!err.message?.includes("Session expired"))
+        toast.error("Error deleting transaction");
+    } finally {
+      setShowDeleteModal(false);
+      setTransactionToDelete(null);
     }
-  } finally {
-    setShowDeleteModal(false);
-    setTransactionToDelete(null);
-  }
-};
+  };
 
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
@@ -433,43 +450,31 @@ useEffect(() => {
     setStartDate("");
     setEndDate("");
     setSelectedLabel("All");
-    setColumnSearch({
-      date: "",
-      category: "",
-      comments: "",
-      label: "",
-    });
-    setSortConfig({ key: null, direction: null });
+    setColumnSearch(EMPTY_SEARCH);
+    setSortConfig({ key: null, direction: "desc" });
     setCurrentPage(1);
+    filtersRef.current = {
+      selectedCategory: "All",
+      startDate: "",
+      endDate: "",
+      selectedLabel: "All",
+      columnSearch: EMPTY_SEARCH,
+      sortConfig: { key: null, direction: "desc" },
+      currentPage: 1,
+    };
+    setFetchTrigger((t) => t + 1);
   };
 
-  const finalBalance = useMemo(() => {
-    if (allTransactions.length === 0) return 0;
-    // Find the transaction with the latest date from all transactions
-    let latestTx = allTransactions[0];
-    for (let tx of allTransactions) {
-      if (new Date(tx.date) > new Date(latestTx.date)) {
-        latestTx = tx;
-      }
-    }
-    return latestTx.runningBalance;
-  }, [allTransactions]);
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // PDF Export
+  // ─────────────────────────────────────────────────────────────────────────
   const handleExportPDF = () => {
     const doc = new jsPDF();
-
-    // --- 1. NEW Naming Convention Logic ---
     const now = new Date();
-    const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
-    const timeStr =
-      now.getHours().toString().padStart(2, "0") +
-      "-" +
-      now.getMinutes().toString().padStart(2, "0") +
-      "-" +
-      now.getSeconds().toString().padStart(2, "0"); // HH-MM-SS
-
-    // Result: ExpenseReport_Prajwal_Narute_2025-12-21_11-45-30.pdf
+    const dateStr = now.toISOString().split("T")[0];
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
     const fileName = `ExpenseReport_${userName.replace(/\s+/g, "_")}_${dateStr}_${timeStr}.pdf`;
+
     doc.setFillColor(245, 247, 250);
     doc.rect(0, 0, 210, 297, "F");
     doc.setFillColor(33, 150, 243);
@@ -477,39 +482,29 @@ useEffect(() => {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(" Expense Report", 105, 13, { align: "center" });
+    doc.text("Expense Report", 105, 13, { align: "center" });
 
-    const totalDebit = filteredTransactions
-      .filter((t) => t.type === "debit")
-      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-
-    const totalCredit = filteredTransactions
-      .filter((t) => t.type === "credit")
-      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-
-    const currentBal =
-      filteredTransactions.length > 0
-        ? filteredTransactions[0].runningBalance
-        : openingBalance;
+    const closingBal =
+      transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
 
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
-    doc.text(" Summary", 14, 28);
+    doc.text("Summary", 14, 28);
     autoTable(doc, {
       startY: 34,
       head: [["Metric", "Value"]],
       body: [
         [
           "Total Expense",
-          totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+          totalExpense.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
         ],
         [
           "Total Credit",
-          totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+          totalIncome.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
         ],
         [
           "Closing Balance",
-          currentBal.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+          closingBal.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
         ],
       ],
       theme: "grid",
@@ -523,24 +518,24 @@ useEffect(() => {
       alternateRowStyles: { fillColor: [240, 248, 255] },
       columnStyles: {
         0: { halign: "left", fontStyle: "bold", cellWidth: 80 },
-        1: { halign: "right", cellWidth: 60, textColor: [33, 33, 33] },
+        1: { halign: "right", cellWidth: 60 },
       },
     });
 
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
-    doc.text(" Applied Filters", 14, doc.lastAutoTable.finalY + 12);
-
-    const categoryText = selectedCategory !== "All" ? selectedCategory : "All";
-    const dateText =
-      startDate && endDate
-        ? `${formatDate(startDate)} To ${formatDate(endDate)}`
-        : "All Dates";
-
+    doc.text("Applied Filters", 14, doc.lastAutoTable.finalY + 12);
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 18,
       head: [["Category", "Date Range"]],
-      body: [[categoryText, dateText]],
+      body: [
+        [
+          selectedCategory !== "All" ? selectedCategory : "All",
+          startDate && endDate
+            ? `${formatDate(startDate)} To ${formatDate(endDate)}`
+            : "All Dates",
+        ],
+      ],
       theme: "grid",
       styles: { fontSize: 10, halign: "center" },
       headStyles: { fillColor: [255, 152, 0], textColor: 255 },
@@ -550,21 +545,10 @@ useEffect(() => {
 
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
-    doc.text(" Transactions", 14, doc.lastAutoTable.finalY + 12);
-
-    const tableColumn = [
-      "Date",
-      "Category",
-      "Comments",
-      "Labels",
-      "Debit",
-      "Credit",
-      "Balance",
-    ];
-    const tableRows = filteredTransactions.map((txn) => {
-      const amount = Number(txn.amount) || 0;
-      const runningBalance = Number(txn.runningBalance) || 0;
-      const labelNames = Array.isArray(txn.labelIds)
+    doc.text("Transactions", 14, doc.lastAutoTable.finalY + 12);
+    const rows = transactions.map((txn) => {
+      const amt = Number(txn.amount) || 0;
+      const lbl = Array.isArray(txn.labelIds)
         ? txn.labelIds
             .map((id) => labelMap[id]?.name || "")
             .filter(Boolean)
@@ -574,29 +558,41 @@ useEffect(() => {
         formatDate(txn.date),
         txn.category,
         txn.comments || "-",
-        labelNames,
+        lbl,
         txn.type === "debit"
-          ? amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })
+          ? amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })
           : "",
         txn.type === "credit"
-          ? amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })
+          ? amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })
           : "",
-        runningBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+        Number(txn.runningBalance).toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+        }),
       ];
     });
 
-    if (tableRows.length === 0) {
+    if (!rows.length) {
       doc.setFontSize(12);
       doc.setTextColor(200, 0, 0);
       doc.text(
-        " No transactions match the selected filters.",
+        "No transactions match the selected filters.",
         14,
         doc.lastAutoTable.finalY + 18,
       );
     } else {
       autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
+        head: [
+          [
+            "Date",
+            "Category",
+            "Comments",
+            "Labels",
+            "Debit",
+            "Credit",
+            "Balance",
+          ],
+        ],
+        body: rows,
         startY: doc.lastAutoTable.finalY + 18,
         styles: { fontSize: 9, valign: "middle" },
         headStyles: {
@@ -617,29 +613,213 @@ useEffect(() => {
         },
       });
     }
-
-    const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(10);
     doc.setTextColor(80);
     doc.text(
-      ` Report Date: ${new Date().toLocaleString()}`,
+      `Report Date: ${new Date().toLocaleString()}`,
       200,
-      pageHeight - 10,
+      doc.internal.pageSize.height - 10,
       { align: "right" },
     );
-
     doc.save(fileName);
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const renderSearchPopup = (key, placeholder) => (
+    <div className="search-popup" ref={searchPopupRef}>
+      <input
+        ref={searchInputRef}
+        placeholder={placeholder}
+        value={columnSearch[key]}
+        onChange={(e) => handleColumnSearchChange(key, e.target.value)}
+      />
+      {columnSearch[key] && (
+        <button
+          style={{
+            fontSize: "11px",
+            padding: "2px 8px",
+            marginTop: "4px",
+            background: "#f0f0f0",
+            border: "1px solid #ddd",
+            borderRadius: "4px",
+            cursor: "pointer",
+            width: "100%",
+          }}
+          onClick={() => {
+            handleColumnSearchChange(key, "");
+            setActiveSearchColumn(null);
+          }}
+        >
+          ✕ Clear
+        </button>
+      )}
+      <ul>
+        {getSuggestions(key, columnSearch[key]).map((s) => (
+          <li key={s} onClick={() => applyColumnSuggestion(key, s)}>
+            {s}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  const renderColumnHeader = (searchKey, label, placeholder, sortKey) => {
+    const sk = sortKey || searchKey;
+    const hasSearch = Boolean(columnSearch[searchKey]);
+    const isSortAsc = sortConfig.key === sk && sortConfig.direction === "asc";
+    const isSortDesc = sortConfig.key === sk && sortConfig.direction === "desc";
+    const isSortActive = isSortAsc || isSortDesc;
+
+    return (
+      <th style={{ position: "relative", whiteSpace: "nowrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            flexWrap: "nowrap",
+          }}
+        >
+          <span style={{ flex: "1 1 auto" }}>{label}</span>
+
+          <span
+            title={
+              hasSearch
+                ? `Filtering: "${columnSearch[searchKey]}"`
+                : `Search ${label}`
+            }
+            onClick={() =>
+              setActiveSearchColumn(
+                activeSearchColumn === searchKey ? null : searchKey,
+              )
+            }
+            style={{
+              cursor: "pointer",
+              fontSize: "15px",
+              padding: "2px 4px",
+              borderRadius: "4px",
+              color: hasSearch ? "#fff" : "#999",
+              background: hasSearch ? "#4361ee" : "transparent",
+              transition: "all 0.15s",
+              lineHeight: 2,
+              userSelect: "none",
+            }}
+          >
+            🔍
+          </span>
+
+          {hasSearch && (
+            <span
+              title="Clear search filter"
+              onClick={() => handleColumnSearchChange(searchKey, "")}
+              style={{
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 700,
+                padding: "1px 5px",
+                borderRadius: "10px",
+                color: "#fff",
+                background: "#f72585",
+                lineHeight: 1.4,
+                userSelect: "none",
+              }}
+            >
+              ✕
+            </span>
+          )}
+
+          <span
+            style={{
+              display: "inline-flex",
+              flexDirection: "column",
+              gap: "0px",
+              marginLeft: "2px",
+            }}
+          >
+            <span
+              title="Sort ascending"
+              onClick={() => handleSort(sk, "asc")}
+              style={{
+                cursor: "pointer",
+                fontSize: "13px",
+                lineHeight: "13px",
+                color: isSortAsc ? "#4361ee" : "#bbb",
+                fontWeight: isSortAsc ? 900 : 400,
+                transition: "color 0.15s",
+                userSelect: "none",
+                display: "block",
+              }}
+            >
+              ▲
+            </span>
+            <span
+              title="Sort descending"
+              onClick={() => handleSort(sk, "desc")}
+              style={{
+                cursor: "pointer",
+                fontSize: "13px",
+                lineHeight: "13px",
+                color: isSortDesc ? "#4361ee" : "#bbb",
+                fontWeight: isSortDesc ? 900 : 400,
+                transition: "color 0.15s",
+                userSelect: "none",
+                display: "block",
+              }}
+            >
+              ▼
+            </span>
+          </span>
+
+          {isSortActive && (
+            <span
+              title="Clear sort"
+              onClick={() => {
+                setSortConfig({ key: null, direction: "desc" });
+                snapshotFilters({
+                  sortConfig: { key: null, direction: "desc" },
+                  currentPage: 1,
+                });
+                setCurrentPage(1);
+                setFetchTrigger((t) => t + 1);
+              }}
+              style={{
+                cursor: "pointer",
+                fontSize: "10px",
+                fontWeight: 700,
+                padding: "1px 4px",
+                borderRadius: "8px",
+                color: "#fff",
+                background: "#3a0ca3",
+                lineHeight: 1.4,
+                userSelect: "none",
+              }}
+            >
+              ✕
+            </span>
+          )}
+        </div>
+
+        {activeSearchColumn === searchKey &&
+          renderSearchPopup(searchKey, placeholder)}
+      </th>
+    );
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // JSX
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       {isInitialLoad && <LoadingOverlay />}
       <div className="container">
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="header">
           <h1>Expense Tracker</h1>
           <div className="header-right">
-            <span id="currentDate" className="current-month"></span>
+            <span id="currentDate" className="current-month" />
             <div className="button-group">
               <button
                 className="add-btn"
@@ -653,14 +833,13 @@ useEffect(() => {
               </button>
               <button
                 className="add-btn"
-                onClick={() => setFilterOpen((prev) => !prev)}
+                onClick={() => setFilterOpen((p) => !p)}
               >
                 {filterOpen ? "Hide Filters" : "Show Filters"}
               </button>
               <div className="profile-wrapper" ref={dropdownRef}>
                 <button
                   className="profile-btn"
-                  ref={avatarBtnRef}
                   onClick={() => setDropdownOpen((o) => !o)}
                   aria-label="Profile menu"
                 >
@@ -668,11 +847,9 @@ useEffect(() => {
                     <i className="fas fa-user" />
                   </div>
                 </button>
-
                 <div
-                  className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}
+                  className={`profile-dropdown${dropdownOpen ? " show" : ""}`}
                 >
-                  {/* Header */}
                   <div className="profile-header">
                     <div className="profile-avatar large">
                       <i className="fas fa-user" />
@@ -682,100 +859,66 @@ useEffect(() => {
                       <p>Manage your account</p>
                     </div>
                   </div>
-
-                  {/* Menu */}
                   <div className="profile-menu">
-                    <div
-                      className="profile-item"
-                      onClick={() => {
-                        navigate("/dashboard");
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <div className="icon bg-green">
-                        <i className="fas fa-th-large" />
+                    {[
+                      {
+                        path: "/dashboard",
+                        icon: "fa-th-large",
+                        label: "Dashboard",
+                        sub: "View overview and analytics",
+                        cls: "bg-green",
+                      },
+                      {
+                        path: "/manage-finances",
+                        icon: "fa-book",
+                        label: "Contact Ledger",
+                        sub: "View all contacts",
+                        cls: "bg-blue",
+                      },
+                      {
+                        path: "/manage-contacts",
+                        icon: "fa-users",
+                        label: "Manage Contacts",
+                        sub: "Add and edit contacts",
+                        cls: "bg-purple",
+                      },
+                      {
+                        path: "/manage-categories",
+                        icon: "fa-cog",
+                        label: "Manage Categories",
+                        sub: "Organize expenses",
+                        cls: "bg-indigo",
+                      },
+                      {
+                        path: "/manage-labels",
+                        icon: "fa-tag",
+                        label: "Manage Labels",
+                        sub: "Create custom labels",
+                        cls: "bg-violet",
+                      },
+                    ].map(({ path, icon, label, sub, cls }) => (
+                      <div
+                        key={path}
+                        className="profile-item"
+                        onClick={() => {
+                          navigate(path);
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        <div className={`icon ${cls}`}>
+                          <i className={`fas ${icon}`} />
+                        </div>
+                        <div>
+                          <span>{label}</span>
+                          <small>{sub}</small>
+                        </div>
+                        <i className="fas fa-chevron-right arrow" />
                       </div>
-                      <div>
-                        <span>Dashboard</span>
-                        <small>View overview and analytics</small>
-                      </div>
-                      <i className="fas fa-chevron-right arrow" />
-                    </div>
-
-                    <div
-                      className="profile-item"
-                      onClick={() => {
-                        navigate("/manage-finances");
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <div className="icon bg-blue">
-                        <i className="fas fa-book" />
-                      </div>
-                      <div>
-                        <span>Contact Ledger</span>
-                        <small>View all contacts</small>
-                      </div>
-                      <i className="fas fa-chevron-right arrow" />
-                    </div>
-
-                    <div
-                      className="profile-item"
-                      onClick={() => {
-                        navigate("/manage-contacts");
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <div className="icon bg-purple">
-                        <i className="fas fa-users" />
-                      </div>
-                      <div>
-                        <span>Manage Contacts</span>
-                        <small>Add and edit contacts</small>
-                      </div>
-                      <i className="fas fa-chevron-right arrow" />
-                    </div>
-
-                    <div
-                      className="profile-item"
-                      onClick={() => {
-                        navigate("/manage-categories");
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <div className="icon bg-indigo">
-                        <i className="fas fa-cog" />
-                      </div>
-                      <div>
-                        <span>Manage Categories</span>
-                        <small>Organize expenses</small>
-                      </div>
-                      <i className="fas fa-chevron-right arrow" />
-                    </div>
-
-                    <div
-                      className="profile-item"
-                      onClick={() => {
-                        navigate("/manage-labels");
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <div className="icon bg-violet">
-                        <i className="fas fa-tag" />
-                      </div>
-                      <div>
-                        <span>Manage Labels</span>
-                        <small>Create custom labels</small>
-                      </div>
-                      <i className="fas fa-chevron-right arrow" />
-                    </div>
+                    ))}
                   </div>
-
-                  {/* Logout */}
                   <div className="profile-footer">
                     <button className="logout-btn" onClick={handleLogout}>
-                      <i className="fas fa-sign-out-alt" />
-                      Logout
+                      <i className="fas fa-sign-out-alt" /> Logout
                     </button>
                   </div>
                 </div>
@@ -784,27 +927,50 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Filter Section */}
+        {/* ── Filter Bar ── */}
         <TransactionFilter
           filterOpen={filterOpen}
           categoryOptions={categoryOptions}
           selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
+          setSelectedCategory={(v) =>
+            handleFilterChange(setSelectedCategory, "selectedCategory", v)
+          }
           startDate={startDate}
-          setStartDate={setStartDate}
+          setStartDate={(v) => handleFilterChange(setStartDate, "startDate", v)}
           endDate={endDate}
-          setEndDate={setEndDate}
+          setEndDate={(v) => handleFilterChange(setEndDate, "endDate", v)}
           labelOptions={labelOptions}
           selectedLabel={selectedLabel}
-          setSelectedLabel={setSelectedLabel}
+          setSelectedLabel={(v) =>
+            handleFilterChange(setSelectedLabel, "selectedLabel", v)
+          }
           resetFilters={resetFilters}
           setCurrentPage={setCurrentPage}
           labelMap={labelMap}
         />
 
-        {/* Summary Section */}
+        {/* ── Summary ── */}
         <div className="summary-section">
-          <h2 className="summary-title">Summary</h2>
+          <h2 className="summary-title">
+            Summary
+            {hasActiveFilters && (
+              <span
+                style={{
+                  marginLeft: "10px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  color: "#4361ee",
+                  background: "#eef2ff",
+                  padding: "3px 10px",
+                  borderRadius: "20px",
+                  verticalAlign: "middle",
+                  border: "1px solid #c7d2fe",
+                }}
+              >
+                Filtered view
+              </span>
+            )}
+          </h2>
           <div className="summary-cards">
             <div className="summary-card balance">
               <h3>Current Balance</h3>
@@ -836,7 +1002,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Transactions table */}
+        {/* ── Table ── */}
         <div className="table-wrapper">
           <h2 className="month-heading">
             Transactions
@@ -863,509 +1029,40 @@ useEffect(() => {
                     verticalAlign: "middle",
                   }}
                 />
-                Loading...
+                Loading…
               </span>
             )}
           </h2>
           <table>
             <thead>
               <tr>
-                <th>
-                  Date
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "date" ? null : "date",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "date" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("date", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "date" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("date", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "date" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search date..."
-                        value={columnSearch.date}
-                        onChange={(e) =>
-                          setColumnSearch({
-                            ...columnSearch,
-                            date: e.target.value,
-                          })
-                        }
-                      />
-                      <ul>
-                        {getSuggestions("date", columnSearch.date).map((s) => (
-                          <li
-                            key={s}
-                            onClick={() => {
-                              setColumnSearch({ ...columnSearch, date: s });
-
-                              setExactMatchColumns((prev) => ({
-                                ...prev,
-                                date: true, // 👈 EXACT MATCH
-                              }));
-
-                              setActiveSearchColumn(null);
-                            }}
-                          >
-                            {s}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Category
-                  <span className="icon-group">
-                    {/* 🔍 SEARCH */}
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "category" ? null : "category",
-                        )
-                      }
-                    />
-
-                    {/* ▲▼ SORT */}
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "category" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("category", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "category" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("category", "asc")}
-                    />
-                  </span>
-                  {/* 🔍 SEARCH BOX */}
-                  {activeSearchColumn === "category" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search category..."
-                        value={columnSearch.category}
-                        onChange={(e) =>
-                          setColumnSearch({
-                            ...columnSearch,
-                            category: e.target.value,
-                          })
-                        }
-                      />
-                      <ul>
-                        {getSuggestions("category", columnSearch.category).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({
-                                  ...columnSearch,
-                                  category: s,
-                                });
-
-                                setExactMatchColumns((prev) => ({
-                                  ...prev,
-                                  category: true, // 👈 EXACT MATCH
-                                }));
-
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Comments
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "comments" ? null : "comments",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "comments" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("comments", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "comments" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("comments", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "comments" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search comments..."
-                        value={columnSearch.comments}
-                        onChange={(e) =>
-                          setColumnSearch({
-                            ...columnSearch,
-                            comments: e.target.value,
-                          })
-                        }
-                      />
-                      <ul>
-                        {getSuggestions("comments", columnSearch.comments).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({
-                                  ...columnSearch,
-                                  comments: s,
-                                });
-
-                                setExactMatchColumns((prev) => ({
-                                  ...prev,
-                                  comments: true, // 👈 EXACT MATCH
-                                }));
-
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Label
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "label" ? null : "label",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "label" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("label", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "label" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("label", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "label" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search label..."
-                        value={columnSearch.label}
-                        onChange={(e) => {
-                          setColumnSearch({
-                            ...columnSearch,
-                            label: e.target.value,
-                          });
-
-                          setExactMatchColumns((prev) => ({
-                            ...prev,
-                            label: false, // 👈 CONTAINS search
-                          }));
-                        }}
-                      />
-
-                      <ul>
-                        {getSuggestions("label", columnSearch.label).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({ ...columnSearch, label: s });
-
-                                setExactMatchColumns((prev) => ({
-                                  ...prev,
-                                  label: true, // 👈 EXACT MATCH
-                                }));
-
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Debit
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "debit" ? null : "debit",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "debit" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("debit", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "debit" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("debit", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "debit" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search debit..."
-                        value={columnSearch.debit}
-                        onChange={(e) => {
-                          setColumnSearch({
-                            ...columnSearch,
-                            debit: e.target.value,
-                          });
-                          setExactMatchColumns((p) => ({ ...p, debit: false }));
-                        }}
-                      />
-                      <ul>
-                        {getSuggestions("debit", columnSearch.debit).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({ ...columnSearch, debit: s });
-                                setExactMatchColumns((p) => ({
-                                  ...p,
-                                  debit: true,
-                                }));
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Credit
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "credit" ? null : "credit",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "credit" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("credit", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "credit" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("credit", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "credit" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search credit..."
-                        value={columnSearch.credit}
-                        onChange={(e) => {
-                          setColumnSearch({
-                            ...columnSearch,
-                            credit: e.target.value,
-                          });
-                          setExactMatchColumns((p) => ({
-                            ...p,
-                            credit: false,
-                          }));
-                        }}
-                      />
-                      <ul>
-                        {getSuggestions("credit", columnSearch.credit).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({ ...columnSearch, credit: s });
-                                setExactMatchColumns((p) => ({
-                                  ...p,
-                                  credit: true,
-                                }));
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
-                <th>
-                  Balance
-                  <span className="icon-group">
-                    <i
-                      className="fas fa-search"
-                      onClick={() =>
-                        setActiveSearchColumn(
-                          activeSearchColumn === "balance" ? null : "balance",
-                        )
-                      }
-                    />
-                    <i
-                      className={`fas fa-sort-up ${
-                        sortConfig.key === "balance" &&
-                        sortConfig.direction === "desc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("balance", "desc")}
-                    />
-                    <i
-                      className={`fas fa-sort-down ${
-                        sortConfig.key === "balance" &&
-                        sortConfig.direction === "asc"
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => handleSort("balance", "asc")}
-                    />
-                  </span>
-                  {activeSearchColumn === "balance" && (
-                    <div className="search-popup" ref={searchPopupRef}>
-                      <input
-                        ref={searchInputRef}
-                        placeholder="Search balance..."
-                        value={columnSearch.balance}
-                        onChange={(e) => {
-                          setColumnSearch({
-                            ...columnSearch,
-                            balance: e.target.value,
-                          });
-                          setExactMatchColumns((p) => ({
-                            ...p,
-                            balance: false,
-                          }));
-                        }}
-                      />
-                      <ul>
-                        {getSuggestions("balance", columnSearch.balance).map(
-                          (s) => (
-                            <li
-                              key={s}
-                              onClick={() => {
-                                setColumnSearch({
-                                  ...columnSearch,
-                                  balance: s,
-                                });
-                                setExactMatchColumns((p) => ({
-                                  ...p,
-                                  balance: true,
-                                }));
-                                setActiveSearchColumn(null);
-                              }}
-                            >
-                              {s}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </th>
-
+                {renderColumnHeader("date", "Date", "Search date…", "date")}
+                {renderColumnHeader(
+                  "category",
+                  "Category",
+                  "Search category…",
+                  "category",
+                )}
+                {renderColumnHeader(
+                  "comments",
+                  "Comments",
+                  "Search comments…",
+                  "comments",
+                )}
+                {renderColumnHeader("label", "Label", "Search label…", "type")}
+                {renderColumnHeader("debit", "Debit", "Search debit…", "debit")}
+                {renderColumnHeader(
+                  "credit",
+                  "Credit",
+                  "Search credit…",
+                  "credit",
+                )}
+                {renderColumnHeader(
+                  "balance",
+                  "Balance",
+                  "Search balance…",
+                  "balance",
+                )}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1385,35 +1082,35 @@ useEffect(() => {
                     ))}
                   </tr>
                 ))
-              ) : currentItems.length > 0 ? (
-                currentItems.map((entry) => (
+              ) : transactions.length > 0 ? (
+                transactions.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDate(entry.date)}</td>
                     <td>{entry.category}</td>
                     <td>{entry.comments || "-"}</td>
                     <td>
-                      {Array.isArray(entry.labelIds) &&
-                      entry.labelIds.length > 0 ? (
-                        entry.labelIds.map((lid) => (
-                          <span
-                            key={lid}
-                            className="label-badge"
-                            style={{
-                              backgroundColor: `${
-                                labelMap[lid]?.color || "#6c5ce7"
-                              }22`,
-                              color: labelMap[lid]?.color || "#6c5ce7",
-                              border: `1px solid ${
-                                labelMap[lid]?.color || "#6c5ce7"
-                              }`,
-                            }}
-                          >
-                            {labelMap[lid]?.name || "Label"}
-                          </span>
-                        ))
-                      ) : (
-                        <span>-</span>
-                      )}
+                      {(() => {
+                        const validLabels = Array.isArray(entry.labelIds)
+                          ? entry.labelIds.filter((lid) => labelMap[lid])
+                          : [];
+                        return validLabels.length > 0 ? (
+                          validLabels.map((lid) => (
+                            <span
+                              key={lid}
+                              className="label-badge"
+                              style={{
+                                backgroundColor: `${labelMap[lid].color || "#6c5ce7"}22`,
+                                color: labelMap[lid].color || "#6c5ce7",
+                                border: `1px solid ${labelMap[lid].color || "#6c5ce7"}`,
+                              }}
+                            >
+                              {labelMap[lid].name}
+                            </span>
+                          ))
+                        ) : (
+                          <span>-</span>
+                        );
+                      })()}
                     </td>
                     <td
                       className={entry.type === "debit" ? "debit-amount" : ""}
@@ -1461,7 +1158,7 @@ useEffect(() => {
                             state: {
                               transaction: entry,
                               isContactTransaction: !!entry.contactId,
-                              returnPage: currentPage, // ✅ preserve page on edit too
+                              returnPage: currentPage,
                             },
                           })
                         }
@@ -1487,7 +1184,7 @@ useEffect(() => {
                     colSpan="8"
                     style={{ textAlign: "center", padding: "1rem" }}
                   >
-                    No transactions to display.
+                    No transactions found.
                   </td>
                 </tr>
               )}
@@ -1495,10 +1192,10 @@ useEffect(() => {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* ── Pagination ── */}
         <div className="pagination">
           <button
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
             disabled={currentPage === 1 || isLoadingPage}
           >
             ← Previous
@@ -1507,14 +1204,16 @@ useEffect(() => {
             Page {currentPage} of {totalPages || 1}
           </span>
           <button
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            onClick={() =>
+              handlePageChange(Math.min(currentPage + 1, totalPages))
+            }
             disabled={currentPage >= totalPages || isLoadingPage}
           >
             Next →
           </button>
         </div>
 
-        {/* Footer summary */}
+        {/* ── Footer ── */}
         <div className="footer">
           <button
             className="export-pdf-fab"

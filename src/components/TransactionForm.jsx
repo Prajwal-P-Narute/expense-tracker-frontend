@@ -5,7 +5,14 @@ import { toast } from "react-toastify";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import { fetchAllContacts } from "../utils/contactApi";
-import { createTransaction, updateTransaction } from "../utils/transactionApi";
+import {
+  createTransaction,
+  updateTransaction,
+  fetchTransactionPageNumber,
+} from "../utils/transactionApi";
+
+// Must match PAGE_SIZE in ExpenseTracker.jsx
+const PAGE_SIZE = 15;
 
 const TransactionForm = () => {
   const navigate = useNavigate();
@@ -53,15 +60,21 @@ const TransactionForm = () => {
     comments: editingTransaction?.comments || "",
   });
 
+  // Derived lists — recalculated on every render when allCategories changes
   const debitCats = allCategories.filter((c) => c.type === "debit");
   const creditCats = allCategories.filter((c) => c.type === "credit");
 
   useEffect(() => {
     (async () => {
       try {
-        setAllCategories(await fetchCategories());
-        setAllLabels(await fetchLabels());
-        setAllContacts(await fetchAllContacts());
+        const [cats, labels, contacts] = await Promise.all([
+          fetchCategories(),
+          fetchLabels(),
+          fetchAllContacts(),
+        ]);
+        setAllCategories(cats);
+        setAllLabels(labels);
+        setAllContacts(contacts);
       } catch (error) {
         toast.error("Failed to load necessary data.");
       }
@@ -92,7 +105,7 @@ const TransactionForm = () => {
       setShowContactSelect(true);
     } else {
       setShowContactSelect(false);
-      setSelectedContactId(""); // Reset contact if category changes to a non-contact type
+      setSelectedContactId("");
     }
   }, [
     formData.debitCategory,
@@ -104,7 +117,7 @@ const TransactionForm = () => {
   ]);
 
   const handleTypeToggle = (selectedType) => {
-    if (isEditMode && isContactTransactionOnLoad) return; // Prevent switching type when editing a contact transaction
+    if (isEditMode && isContactTransactionOnLoad) return;
     setType(selectedType);
     setFormData((prev) => ({
       ...prev,
@@ -153,17 +166,37 @@ const TransactionForm = () => {
 
     try {
       if (isEditMode) {
-        await updateTransaction(editingTransaction.id, payload);
-        toast.success("Transaction updated successfully!");
-      } else {
+  await updateTransaction(editingTransaction.id, payload);
+  toast.success("Transaction updated successfully!");
+
+  // Only re-compute the page when the date actually changed.
+  // If date is the same, the transaction stays in its original
+  // position so we navigate back to the page the user came from.
+  const originalDate = editingTransaction.date.split("T")[0];
+  const dateChanged  = originalDate !== formData.date;
+
+  let targetPage = returnPage;
+  if (dateChanged) {
+    const zeroBasedPage = await fetchTransactionPageNumber(
+      editingTransaction.id,
+      PAGE_SIZE,
+    );
+    targetPage = zeroBasedPage + 1;
+  }
+
+  navigate(
+    showContactSelect ? "/manage-finances" : "/expense-tracker",
+    { state: { refresh: true, returnPage: targetPage } },
+  );
+} else {
         await createTransaction(payload);
         toast.success("Transaction added successfully!");
-      }
 
-      // Navigate to the correct page based on whether it was a contact transaction
-    navigate(showContactSelect ? "/manage-finances" : "/expense-tracker", {
-  state: { refresh: true, returnPage: returnPage },
-});
+        navigate(
+          showContactSelect ? "/manage-finances" : "/expense-tracker",
+          { state: { refresh: true, returnPage: returnPage } },
+        );
+      }
     } catch (error) {
       toast.error(error.message || "An error occurred.");
     } finally {
@@ -222,7 +255,14 @@ const TransactionForm = () => {
               <label htmlFor="debitCategory" className="required">
                 Category
               </label>
+              {/*
+               * key={debitCats.length} forces React to remount this select
+               * once the async category list arrives. Without it, browsers
+               * may not reflect the controlled value when options load after
+               * the initial render (controlled-select timing quirk).
+               */}
               <select
+                key={`debit-${debitCats.length}`}
                 id="debitCategory"
                 name="debitCategory"
                 value={formData.debitCategory}
@@ -242,6 +282,7 @@ const TransactionForm = () => {
                   Contact
                 </label>
                 <select
+                  key={`contact-${allContacts.length}`}
                   id="contactId"
                   value={selectedContactId}
                   onChange={(e) => setSelectedContactId(e.target.value)}
@@ -277,7 +318,11 @@ const TransactionForm = () => {
               <label htmlFor="creditCategory" className="required">
                 Category
               </label>
+              {/*
+               * Same key trick for the credit select.
+               */}
               <select
+                key={`credit-${creditCats.length}`}
                 id="creditCategory"
                 name="creditCategory"
                 value={formData.creditCategory}
@@ -297,6 +342,7 @@ const TransactionForm = () => {
                   Contact
                 </label>
                 <select
+                  key={`contact-${allContacts.length}`}
                   id="contactId"
                   value={selectedContactId}
                   onChange={(e) => setSelectedContactId(e.target.value)}

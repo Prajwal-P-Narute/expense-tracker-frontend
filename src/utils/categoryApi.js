@@ -1,4 +1,6 @@
+// src/utils/categoryApi.js
 import { BASE_URL } from "../utils/api";
+import { fetchWithAuth } from "./apiInterceptor";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -6,7 +8,7 @@ const authHeaders = () => ({
 });
 
 export async function fetchCategories() {
-  const res = await fetch(`${BASE_URL}/api/categories`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/categories`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to load categories");
@@ -14,7 +16,7 @@ export async function fetchCategories() {
 }
 
 export async function createCategory(name, type, status) {
-  const res = await fetch(`${BASE_URL}/api/categories`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/categories`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ name, type, status }),
@@ -28,7 +30,7 @@ export async function createCategory(name, type, status) {
 }
 
 export async function renameCategory(id, newName) {
-  const res = await fetch(`${BASE_URL}/api/categories/${id}`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/categories/${id}`, {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify({ newName }),
@@ -38,7 +40,7 @@ export async function renameCategory(id, newName) {
 }
 
 export async function updateCategoryStatus(id, newName, status) {
-  const res = await fetch(`${BASE_URL}/api/categories/${id}/status`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/categories/${id}/status`, {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify({ newName, status }),
@@ -52,18 +54,16 @@ export async function updateCategoryStatus(id, newName, status) {
 
 export async function deleteCategory(id, transferToId) {
   const url = transferToId
-    ? `${BASE_URL}/api/categories/${id}?transferTo=${encodeURIComponent(
-        transferToId
-      )}`
+    ? `${BASE_URL}/api/categories/${id}?transferTo=${encodeURIComponent(transferToId)}`
     : `${BASE_URL}/api/categories/${id}`;
-  const res = await fetch(url, { method: "DELETE", headers: authHeaders() });
+  const res = await fetchWithAuth(url, { method: "DELETE", headers: authHeaders() });
   if (res.status === 204) return { success: true };
   if (!res.ok) throw new Error("Failed to delete category");
   return res.json();
 }
 
 export async function getCategoryUsage(id) {
-  const res = await fetch(`${BASE_URL}/api/categories/${id}/usage`, {
+  const res = await fetchWithAuth(`${BASE_URL}/api/categories/${id}/usage`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to check category usage");

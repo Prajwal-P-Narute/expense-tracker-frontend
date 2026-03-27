@@ -8,32 +8,73 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
-
-// ✅ NEW: Fetch paginated transactions (recommended for consistent balance display)
+/**
+ * Fetch paginated transactions with full server-side filtering AND sorting.
+ */
 export async function fetchTransactionsPageable(page = 0, pageSize = 15, filters = {}) {
   try {
-    const params = new URLSearchParams();
-    params.append('page', page);
-    params.append('size', pageSize);
+    const safePage     = Number.isFinite(Number(page))     ? Math.max(0, Math.floor(Number(page)))     : 0;
+    const safePageSize = Number.isFinite(Number(pageSize)) ? Math.max(1, Math.floor(Number(pageSize))) : 15;
 
-    // ✅ Send filters to backend
-    if (filters.category && filters.category !== "All") {
-      params.append('category', filters.category);
+    const params = new URLSearchParams();
+    params.append("page", safePage);
+    params.append("size", safePageSize);
+
+    // ── Dropdown / range filters ──────────────────────────────────────────
+    if (filters.category && filters.category !== "All")
+      params.append("category", filters.category);
+    if (filters.startDate)
+      params.append("startDate", filters.startDate);
+    if (filters.endDate)
+      params.append("endDate", filters.endDate);
+    if (filters.labelId && filters.labelId !== "All")
+      params.append("labelId", filters.labelId);
+
+    // ── Column text searches ──────────────────────────────────────────────
+    if (filters.search?.date?.trim())
+      params.append("dateSearch", filters.search.date.trim());
+    if (filters.search?.category?.trim())
+      params.append("categorySearch", filters.search.category.trim());
+    if (filters.search?.comments?.trim())
+      params.append("commentsSearch", filters.search.comments.trim());
+    if (filters.search?.label?.trim())
+      params.append("labelSearch", filters.search.label.trim());
+
+    // ── Debit column search → amountSearch + typeFilter=debit ────────────
+    if (filters.search?.debit?.trim()) {
+      params.append("amountSearch", filters.search.debit.trim());
+      params.append("typeFilter", "debit");
     }
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
+
+    // ── Credit column search → amountSearch + typeFilter=credit ─────────
+    if (filters.search?.credit?.trim()) {
+      params.append("amountSearch", filters.search.credit.trim());
+      params.append("typeFilter", "credit");
     }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
+
+    // ── Balance column search ─────────────────────────────────────────────
+    if (filters.search?.balance?.trim())
+      params.append("balanceSearch", filters.search.balance.trim());
+
+    // ── Sort ──────────────────────────────────────────────────────────────
+    if (filters.sortBy) {
+      if (filters.sortBy === "debit") {
+        params.append("sortBy", "amount");
+        params.append("sortDir", filters.sortDir || "desc");
+        if (!filters.search?.debit?.trim()) {
+          params.append("typeFilter", "debit");
+        }
+      } else if (filters.sortBy === "credit") {
+        params.append("sortBy", "amount");
+        params.append("sortDir", filters.sortDir || "desc");
+        if (!filters.search?.credit?.trim()) {
+          params.append("typeFilter", "credit");
+        }
+      } else {
+        params.append("sortBy", filters.sortBy);
+        params.append("sortDir", filters.sortDir || "desc");
+      }
     }
-    if (filters.labelId && filters.labelId !== "All") {
-      params.append('labelId', filters.labelId);
-    }
-    // Column search params
-    if (filters.search?.date)     params.append('date', filters.search.date);
-    if (filters.search?.category) params.append('categorySearch', filters.search.category);
-    if (filters.search?.comments) params.append('comments', filters.search.comments);
-    if (filters.search?.label)    params.append('labelSearch', filters.search.label);
 
     const res = await fetchWithAuth(
       `${BASE_URL}/api/transactions?${params.toString()}`,
@@ -51,9 +92,87 @@ export async function fetchTransactionsPageable(page = 0, pageSize = 15, filters
   }
 }
 
+/**
+ * Fetch aggregated summary (totalIncome, totalExpense, finalBalance)
+ * for the exact same filter set as fetchTransactionsPageable.
+ */
+export async function fetchFilteredSummary(filters = {}) {
+  try {
+    const params = new URLSearchParams();
+
+    // ── Dropdown / range filters ──────────────────────────────────────────
+    if (filters.category && filters.category !== "All")
+      params.append("category", filters.category);
+    if (filters.startDate)
+      params.append("startDate", filters.startDate);
+    if (filters.endDate)
+      params.append("endDate", filters.endDate);
+    if (filters.labelId && filters.labelId !== "All")
+      params.append("labelId", filters.labelId);
+
+    // ── Column text searches ──────────────────────────────────────────────
+    if (filters.search?.date?.trim())
+      params.append("dateSearch", filters.search.date.trim());
+    if (filters.search?.category?.trim())
+      params.append("categorySearch", filters.search.category.trim());
+    if (filters.search?.comments?.trim())
+      params.append("commentsSearch", filters.search.comments.trim());
+    if (filters.search?.label?.trim())
+      params.append("labelSearch", filters.search.label.trim());
+
+    if (filters.search?.debit?.trim()) {
+      params.append("amountSearch", filters.search.debit.trim());
+      params.append("typeFilter", "debit");
+    }
+    if (filters.search?.credit?.trim()) {
+      params.append("amountSearch", filters.search.credit.trim());
+      params.append("typeFilter", "credit");
+    }
+    if (filters.search?.balance?.trim())
+      params.append("balanceSearch", filters.search.balance.trim());
+
+    const res = await fetchWithAuth(
+      `${BASE_URL}/api/transactions/summary?${params.toString()}`,
+      { headers: authHeaders() }
+    );
+
+    if (!res.ok) {
+      console.error("Failed to load summary, status:", res.status);
+      return { totalIncome: 0, totalExpense: 0, finalBalance: 0 };
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching filtered summary:", error);
+    return { totalIncome: 0, totalExpense: 0, finalBalance: 0 };
+  }
+}
+
+/**
+ * Returns the 0-based page number where a transaction lives after an edit,
+ * using newest-first ordering with no filters.
+ * Call this AFTER updateTransaction so the new date is already persisted.
+ *
+ * @param {string} id       - transaction ID
+ * @param {number} pageSize - must match PAGE_SIZE used in ExpenseTracker (default 15)
+ * @returns {Promise<number>} 0-based page index; falls back to 0 on error
+ */
+export async function fetchTransactionPageNumber(id, pageSize = 15) {
+  try {
+    const res = await fetchWithAuth(
+      `${BASE_URL}/api/transactions/${id}/page-number?size=${pageSize}`,
+      { headers: authHeaders() }
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return typeof data.page === "number" ? data.page : 0;
+  } catch (error) {
+    console.error("Error fetching transaction page number:", error);
+    return 0;
+  }
+}
+
 export async function fetchTransactions() {
   try {
-    // Use fetchAllTransactions to get ALL transactions
     return await fetchAllTransactions();
   } catch (error) {
     console.error("Error fetching transactions:", error);
@@ -65,36 +184,25 @@ export async function fetchAllTransactions() {
   try {
     let allTransactions = [];
     let page = 0;
-    const pageSize = 50; // Fetch more per request
+    const pageSize = 50;
     let hasMore = true;
-    
+
     while (hasMore) {
       const res = await fetchWithAuth(
         `${BASE_URL}/api/transactions?page=${page}&size=${pageSize}`,
-        {
-          headers: authHeaders(),
-        }
+        { headers: authHeaders() }
       );
-      
-      if (!res.ok) {
-        console.error("Failed to load transactions, status:", res.status);
-        break;
-      }
-      
+      if (!res.ok) { console.error("Failed:", res.status); break; }
+
       const data = await res.json();
-      console.log(`Page ${page} response:`, data);
-      
-      if (data && data.content && Array.isArray(data.content)) {
+      if (data?.content && Array.isArray(data.content)) {
         allTransactions = [...allTransactions, ...data.content];
-        // Check if there are more pages
         hasMore = !data.last && data.content.length === pageSize;
         page++;
       } else {
         hasMore = false;
       }
     }
-    
-    console.log(`Total transactions fetched: ${allTransactions.length}`);
     return allTransactions;
   } catch (error) {
     console.error("Error fetching all transactions:", error);
@@ -102,18 +210,17 @@ export async function fetchAllTransactions() {
   }
 }
 
-// New function for FinTrack page
 export async function fetchContactTransactions(page = 0, pageSize = 20, contactId = null, search = null) {
   const params = new URLSearchParams();
-  params.append('page', page);
-  params.append('size', pageSize);
-  if (contactId) params.append('contactId', contactId);
-  if (search) params.append('search', search);
-  
-  const res = await fetchWithAuth(`${BASE_URL}/api/transactions/contacts?${params.toString()}`, {
-    headers: authHeaders(),
-  });
-  
+  params.append("page", page);
+  params.append("size", pageSize);
+  if (contactId) params.append("contactId", contactId);
+  if (search)    params.append("search", search);
+
+  const res = await fetchWithAuth(
+    `${BASE_URL}/api/transactions/contacts?${params.toString()}`,
+    { headers: authHeaders() }
+  );
   if (!res.ok) throw new Error("Failed to load contact transactions");
   return res.json();
 }
@@ -125,8 +232,8 @@ export async function createTransaction(payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.message || "Failed to create transaction");
+    const err = await res.json();
+    throw new Error(err.message || "Failed to create transaction");
   }
   return res.json();
 }
@@ -138,8 +245,8 @@ export async function updateTransaction(id, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.message || "Failed to update transaction");
+    const err = await res.json();
+    throw new Error(err.message || "Failed to update transaction");
   }
   return res.json();
 }
@@ -149,8 +256,6 @@ export async function deleteTransaction(id) {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (res.status !== 204) {
-    throw new Error("Failed to delete transaction");
-  }
+  if (res.status !== 204) throw new Error("Failed to delete transaction");
   return { success: true };
 }
