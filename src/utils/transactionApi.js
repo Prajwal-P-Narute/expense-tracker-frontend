@@ -8,6 +8,62 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
+function buildTransactionFilterParams(filters = {}, includeSort = false) {
+  const params = new URLSearchParams();
+
+  if (filters.category && filters.category !== "All")
+    params.append("category", filters.category);
+  if (filters.startDate)
+    params.append("startDate", filters.startDate);
+  if (filters.endDate)
+    params.append("endDate", filters.endDate);
+  if (filters.labelId && filters.labelId !== "All")
+    params.append("labelId", filters.labelId);
+
+  if (filters.search?.date?.trim())
+    params.append("dateSearch", filters.search.date.trim());
+  if (filters.search?.category?.trim())
+    params.append("categorySearch", filters.search.category.trim());
+  if (filters.search?.comments?.trim())
+    params.append("commentsSearch", filters.search.comments.trim());
+  if (filters.search?.label?.trim())
+    params.append("labelSearch", filters.search.label.trim());
+
+  if (filters.search?.debit?.trim()) {
+    params.append("amountSearch", filters.search.debit.trim());
+    params.append("typeFilter", "debit");
+  }
+
+  if (filters.search?.credit?.trim()) {
+    params.append("amountSearch", filters.search.credit.trim());
+    params.append("typeFilter", "credit");
+  }
+
+  if (filters.search?.balance?.trim())
+    params.append("balanceSearch", filters.search.balance.trim());
+
+  if (includeSort && filters.sortBy) {
+    if (filters.sortBy === "debit") {
+      params.append("sortBy", "amount");
+      params.append("sortDir", filters.sortDir || "desc");
+      if (!filters.search?.debit?.trim()) {
+        params.append("typeFilter", "debit");
+      }
+    } else if (filters.sortBy === "credit") {
+      params.append("sortBy", "amount");
+      params.append("sortDir", filters.sortDir || "desc");
+      if (!filters.search?.credit?.trim()) {
+        params.append("typeFilter", "credit");
+      }
+    } else {
+      params.append("sortBy", filters.sortBy);
+      params.append("sortDir", filters.sortDir || "desc");
+    }
+  }
+
+  return params;
+}
+
 /**
  * Fetch paginated transactions with full server-side filtering AND sorting.
  */
@@ -16,65 +72,9 @@ export async function fetchTransactionsPageable(page = 0, pageSize = 15, filters
     const safePage     = Number.isFinite(Number(page))     ? Math.max(0, Math.floor(Number(page)))     : 0;
     const safePageSize = Number.isFinite(Number(pageSize)) ? Math.max(1, Math.floor(Number(pageSize))) : 15;
 
-    const params = new URLSearchParams();
+    const params = buildTransactionFilterParams(filters, true);
     params.append("page", safePage);
     params.append("size", safePageSize);
-
-    // ── Dropdown / range filters ──────────────────────────────────────────
-    if (filters.category && filters.category !== "All")
-      params.append("category", filters.category);
-    if (filters.startDate)
-      params.append("startDate", filters.startDate);
-    if (filters.endDate)
-      params.append("endDate", filters.endDate);
-    if (filters.labelId && filters.labelId !== "All")
-      params.append("labelId", filters.labelId);
-
-    // ── Column text searches ──────────────────────────────────────────────
-    if (filters.search?.date?.trim())
-      params.append("dateSearch", filters.search.date.trim());
-    if (filters.search?.category?.trim())
-      params.append("categorySearch", filters.search.category.trim());
-    if (filters.search?.comments?.trim())
-      params.append("commentsSearch", filters.search.comments.trim());
-    if (filters.search?.label?.trim())
-      params.append("labelSearch", filters.search.label.trim());
-
-    // ── Debit column search → amountSearch + typeFilter=debit ────────────
-    if (filters.search?.debit?.trim()) {
-      params.append("amountSearch", filters.search.debit.trim());
-      params.append("typeFilter", "debit");
-    }
-
-    // ── Credit column search → amountSearch + typeFilter=credit ─────────
-    if (filters.search?.credit?.trim()) {
-      params.append("amountSearch", filters.search.credit.trim());
-      params.append("typeFilter", "credit");
-    }
-
-    // ── Balance column search ─────────────────────────────────────────────
-    if (filters.search?.balance?.trim())
-      params.append("balanceSearch", filters.search.balance.trim());
-
-    // ── Sort ──────────────────────────────────────────────────────────────
-    if (filters.sortBy) {
-      if (filters.sortBy === "debit") {
-        params.append("sortBy", "amount");
-        params.append("sortDir", filters.sortDir || "desc");
-        if (!filters.search?.debit?.trim()) {
-          params.append("typeFilter", "debit");
-        }
-      } else if (filters.sortBy === "credit") {
-        params.append("sortBy", "amount");
-        params.append("sortDir", filters.sortDir || "desc");
-        if (!filters.search?.credit?.trim()) {
-          params.append("typeFilter", "credit");
-        }
-      } else {
-        params.append("sortBy", filters.sortBy);
-        params.append("sortDir", filters.sortDir || "desc");
-      }
-    }
 
     const res = await fetchWithAuth(
       `${BASE_URL}/api/transactions?${params.toString()}`,
@@ -98,38 +98,7 @@ export async function fetchTransactionsPageable(page = 0, pageSize = 15, filters
  */
 export async function fetchFilteredSummary(filters = {}) {
   try {
-    const params = new URLSearchParams();
-
-    // ── Dropdown / range filters ──────────────────────────────────────────
-    if (filters.category && filters.category !== "All")
-      params.append("category", filters.category);
-    if (filters.startDate)
-      params.append("startDate", filters.startDate);
-    if (filters.endDate)
-      params.append("endDate", filters.endDate);
-    if (filters.labelId && filters.labelId !== "All")
-      params.append("labelId", filters.labelId);
-
-    // ── Column text searches ──────────────────────────────────────────────
-    if (filters.search?.date?.trim())
-      params.append("dateSearch", filters.search.date.trim());
-    if (filters.search?.category?.trim())
-      params.append("categorySearch", filters.search.category.trim());
-    if (filters.search?.comments?.trim())
-      params.append("commentsSearch", filters.search.comments.trim());
-    if (filters.search?.label?.trim())
-      params.append("labelSearch", filters.search.label.trim());
-
-    if (filters.search?.debit?.trim()) {
-      params.append("amountSearch", filters.search.debit.trim());
-      params.append("typeFilter", "debit");
-    }
-    if (filters.search?.credit?.trim()) {
-      params.append("amountSearch", filters.search.credit.trim());
-      params.append("typeFilter", "credit");
-    }
-    if (filters.search?.balance?.trim())
-      params.append("balanceSearch", filters.search.balance.trim());
+    const params = buildTransactionFilterParams(filters);
 
     const res = await fetchWithAuth(
       `${BASE_URL}/api/transactions/summary?${params.toString()}`,
@@ -144,6 +113,34 @@ export async function fetchFilteredSummary(filters = {}) {
   } catch (error) {
     console.error("Error fetching filtered summary:", error);
     return { totalIncome: 0, totalExpense: 0, finalBalance: 0 };
+  }
+}
+
+export async function fetchTransactionAnalytics(filters = {}) {
+  try {
+    const params = buildTransactionFilterParams(filters);
+
+    const res = await fetchWithAuth(
+      `${BASE_URL}/api/transactions/analytics?${params.toString()}`,
+      { headers: authHeaders() }
+    );
+
+    if (!res.ok) {
+      console.error("Failed to load analytics, status:", res.status);
+      return {
+        debit: { total: 0, maxAmount: 0, items: [] },
+        credit: { total: 0, maxAmount: 0, items: [] },
+        labels: { total: 0, maxAmount: 0, items: [] },
+      };
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching transaction analytics:", error);
+    return {
+      debit: { total: 0, maxAmount: 0, items: [] },
+      credit: { total: 0, maxAmount: 0, items: [] },
+      labels: { total: 0, maxAmount: 0, items: [] },
+    };
   }
 }
 

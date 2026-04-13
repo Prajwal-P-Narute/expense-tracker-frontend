@@ -12,10 +12,12 @@ import { toast } from "react-toastify";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import DeleteModal from "./DeleteModal";
+import DashboardInsights from "./DashboardInsights";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import {
   deleteTransaction,
+  fetchTransactionAnalytics,
   fetchTransactionsPageable,
   fetchFilteredSummary,
 } from "../utils/transactionApi";
@@ -35,6 +37,12 @@ const EMPTY_SEARCH = {
   debit: "",
   credit: "",
   balance: "",
+};
+
+const EMPTY_ANALYTICS = {
+  debit: { total: 0, maxAmount: 0, items: [] },
+  credit: { total: 0, maxAmount: 0, items: [] },
+  labels: { total: 0, maxAmount: 0, items: [] },
 };
 
 const LoadingOverlay = () => (
@@ -60,6 +68,7 @@ const ExpenseTracker = ({ setToken }) => {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [finalBalance, setFinalBalance] = useState(0);
+  const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
@@ -156,8 +165,7 @@ const ExpenseTracker = ({ setToken }) => {
         sortDir: f.sortConfig?.direction || "desc",
       };
 
-      // Fetch page data, opening balance, AND filtered summary in parallel
-      const [openingBal, pageData, summary] = await Promise.all([
+      const [openingBal, pageData, summary, analyticsData] = await Promise.all([
         fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then((r) => r.json()),
@@ -167,6 +175,7 @@ const ExpenseTracker = ({ setToken }) => {
           filters,
         ),
         fetchFilteredSummary(filters),
+        fetchTransactionAnalytics(filters),
       ]);
 
       setOpeningBalance(openingBal);
@@ -177,10 +186,12 @@ const ExpenseTracker = ({ setToken }) => {
       setTotalIncome(summary.totalIncome ?? 0);
       setTotalExpense(summary.totalExpense ?? 0);
       setFinalBalance(summary.finalBalance ?? 0);
+      setAnalytics(analyticsData || EMPTY_ANALYTICS);
     } catch (err) {
       if (!err.message?.includes("Session expired"))
         toast.error("Failed to load transactions.");
       setTransactions([]);
+      setAnalytics(EMPTY_ANALYTICS);
     } finally {
       setIsLoadingPage(false);
       setIsInitialLoad(false);
@@ -192,27 +203,35 @@ const ExpenseTracker = ({ setToken }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchTrigger]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // AUTH + initial load
-  // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
+  // ─────────────────────────────────────────────────────────────────────────────
+// AUTH + initial load
+// ─────────────────────────────────────────────────────────────────────────────
+useEffect(() => {
+  if (!token) {
+    navigate("/login");
+    return;
+  }
 
-    if (location.state?.refresh && location.state?.returnPage) {
-      const pg = location.state.returnPage;
-      navigate(location.pathname, { replace: true, state: {} });
-      setCurrentPage(pg);
-      snapshotFilters({ currentPage: pg });
-    } else {
-      snapshotFilters({ currentPage: 1 });
-    }
-    setFetchTrigger((t) => t + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  if (location.state?.refresh && location.state?.returnPage) {
+    const pg = location.state.returnPage;
+    navigate(location.pathname, { replace: true, state: {} });
+    setCurrentPage(pg);
+    snapshotFilters({ currentPage: pg });
+  } else {
+    // ── Restore page from sessionStorage on refresh, default to 1 ──
+    const savedPage = parseInt(sessionStorage.getItem("et_currentPage"), 10);
+    const pg = savedPage && savedPage > 0 ? savedPage : 1;
+    setCurrentPage(pg);
+    snapshotFilters({ currentPage: pg });
+  }
+  setFetchTrigger((t) => t + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [token]);
 
+// Persist current page so browser refresh lands on the same page
+useEffect(() => {
+  sessionStorage.setItem("et_currentPage", String(currentPage));
+}, [currentPage]);
   // ─────────────────────────────────────────────────────────────────────────
   // Supporting data
   // ─────────────────────────────────────────────────────────────────────────
@@ -1000,6 +1019,11 @@ const ExpenseTracker = ({ setToken }) => {
               </p>
             </div>
           </div>
+
+          <DashboardInsights
+            analytics={analytics}
+            hasActiveFilters={hasActiveFilters}
+          />
         </div>
 
         {/* ── Table ── */}
@@ -1191,27 +1215,77 @@ const ExpenseTracker = ({ setToken }) => {
             </tbody>
           </table>
         </div>
+{/* ── Pagination ── */}
+{totalPages > 1 && (
+  <div className="pagination-bar">
+    {/* First */}
+    <button
+      className="pg-btn pg-edge"
+      onClick={() => handlePageChange(1)}
+      disabled={currentPage === 1 || isLoadingPage}
+      title="First page"
+    >
+      «
+    </button>
 
-        {/* ── Pagination ── */}
-        <div className="pagination">
+    {/* Previous */}
+    <button
+      className="pg-btn pg-prev-next"
+      onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
+      disabled={currentPage === 1 || isLoadingPage}
+      title="Previous page"
+    >
+      ‹
+    </button>
+
+    {/* Page number buttons */}
+    <div className="pg-numbers">
+      {(() => {
+        const total = totalPages || 1;
+        const delta = 2;
+        const start = Math.max(1, currentPage - delta);
+        const end = Math.min(total, currentPage + delta);
+        const pages = [];
+        for (let p = start; p <= end; p++) pages.push(p);
+        return pages.map((p) => (
           <button
-            onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-            disabled={currentPage === 1 || isLoadingPage}
+            key={p}
+            className={`pg-btn pg-num ${p === currentPage ? "pg-active" : ""}`}
+            onClick={() => handlePageChange(p)}
+            disabled={isLoadingPage}
           >
-            ← Previous
+            {p}
           </button>
-          <span>
-            Page {currentPage} of {totalPages || 1}
-          </span>
-          <button
-            onClick={() =>
-              handlePageChange(Math.min(currentPage + 1, totalPages))
-            }
-            disabled={currentPage >= totalPages || isLoadingPage}
-          >
-            Next →
-          </button>
-        </div>
+        ));
+      })()}
+    </div>
+
+    {/* Next */}
+    <button
+      className="pg-btn pg-prev-next"
+      onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
+      disabled={currentPage >= totalPages || isLoadingPage}
+      title="Next page"
+    >
+      ›
+    </button>
+
+    {/* Last */}
+    <button
+      className="pg-btn pg-edge"
+      onClick={() => handlePageChange(totalPages)}
+      disabled={currentPage >= totalPages || isLoadingPage}
+      title="Last page"
+    >
+      »
+    </button>
+
+    {/* Page info */}
+    <span className="pg-info">
+      {currentPage} / {totalPages}
+    </span>
+  </div>
+)}
 
         {/* ── Footer ── */}
         <div className="footer">
