@@ -45,10 +45,10 @@ const EMPTY_ANALYTICS = {
   labels: { total: 0, maxAmount: 0, items: [] },
 };
 
-const LoadingOverlay = () => (
+const LoadingOverlay = ({ message = "Loading transactions..." }) => (
   <div className="loading-overlay">
     <div className="spinner" />
-    <p>Loading transactions...</p>
+    <p>{message}</p>
   </div>
 );
 
@@ -85,8 +85,10 @@ const ExpenseTracker = ({ setToken }) => {
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [userName, setUserName] = useState("");
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
+  const [pendingNavigation, setPendingNavigation] = useState("");
 
   // ── Filters (dropdown / date-range) ──────────────────────────────────────
+  const [selectedType, setSelectedType] = useState("All");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -110,6 +112,7 @@ const ExpenseTracker = ({ setToken }) => {
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
   const searchPopupRef = useRef(null);
+  const transactionsSectionRef = useRef(null);
 
   // ─────────────────────────────────────────────────────────────────────────
   // FETCH TRIGGER PATTERN
@@ -121,6 +124,7 @@ const ExpenseTracker = ({ setToken }) => {
     (overrides = {}) => {
       filtersRef.current = {
         selectedCategory,
+        selectedType,
         startDate,
         endDate,
         selectedLabel,
@@ -132,6 +136,7 @@ const ExpenseTracker = ({ setToken }) => {
     },
     [
       selectedCategory,
+      selectedType,
       startDate,
       endDate,
       selectedLabel,
@@ -157,6 +162,7 @@ const ExpenseTracker = ({ setToken }) => {
     try {
       const filters = {
         category: f.selectedCategory,
+        typeFilter: f.selectedType,
         startDate: f.startDate,
         endDate: f.endDate,
         labelId: f.selectedLabel,
@@ -224,6 +230,7 @@ useEffect(() => {
     setCurrentPage(pg);
     snapshotFilters({ currentPage: pg });
   }
+  setIsLoadingPage(true);
   setFetchTrigger((t) => t + 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [token]);
@@ -324,58 +331,65 @@ useEffect(() => {
       (v) => v.trim() !== "",
     );
     return (
+      selectedType !== "All" ||
       selectedCategory !== "All" ||
       startDate !== "" ||
       endDate !== "" ||
       selectedLabel !== "All" ||
       hasColumnSearch
     );
-  }, [selectedCategory, startDate, endDate, selectedLabel, columnSearch]);
+  }, [
+    selectedType,
+    selectedCategory,
+    startDate,
+    endDate,
+    selectedLabel,
+    columnSearch,
+  ]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Filter / search / sort change handlers
   // ─────────────────────────────────────────────────────────────────────────
 
+  const requestDataRefresh = useCallback(
+    (overrides = {}, nextPage = 1) => {
+      setIsLoadingPage(true);
+      snapshotFilters({ ...overrides, currentPage: nextPage });
+      setCurrentPage(nextPage);
+      setFetchTrigger((t) => t + 1);
+    },
+    [snapshotFilters],
+  );
+
   const handleFilterChange = (setter, key, value) => {
     setter(value);
-    const override = { [key]: value, currentPage: 1 };
-    snapshotFilters(override);
-    setCurrentPage(1);
-    setFetchTrigger((t) => t + 1);
+    requestDataRefresh({ [key]: value }, 1);
   };
 
   const handleColumnSearchChange = (key, value) => {
     const newCS = { ...columnSearch, [key]: value };
     setColumnSearch(newCS);
-    snapshotFilters({ columnSearch: newCS, currentPage: 1 });
-    setCurrentPage(1);
-    setFetchTrigger((t) => t + 1);
+    requestDataRefresh({ columnSearch: newCS }, 1);
   };
 
   const applyColumnSuggestion = (key, value) => {
     const newCS = { ...columnSearch, [key]: value };
     setColumnSearch(newCS);
     setActiveSearchColumn(null);
-    snapshotFilters({ columnSearch: newCS, currentPage: 1 });
-    setCurrentPage(1);
-    setFetchTrigger((t) => t + 1);
+    requestDataRefresh({ columnSearch: newCS }, 1);
   };
 
   const handleSort = (key, direction) => {
     const newSort = { key, direction };
     setSortConfig(newSort);
-    snapshotFilters({ sortConfig: newSort, currentPage: 1 });
-    setCurrentPage(1);
-    setFetchTrigger((t) => t + 1);
+    requestDataRefresh({ sortConfig: newSort }, 1);
   };
 
   const handlePageChange = (newPage) => {
     const safePage = Number.isFinite(Number(newPage))
       ? Math.max(1, Math.floor(Number(newPage)))
       : 1;
-    setCurrentPage(safePage);
-    snapshotFilters({ currentPage: safePage });
-    setFetchTrigger((t) => t + 1);
+    requestDataRefresh({}, safePage);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -464,7 +478,63 @@ useEffect(() => {
     setTransactionToDelete(null);
   };
 
+  const navigateWithLoader = useCallback(
+    (path, options = {}, message = "Opening...") => {
+      if (pendingNavigation) return;
+
+      if (location.pathname === path) {
+        setDropdownOpen(false);
+        return;
+      }
+
+      setPendingNavigation(message);
+      setDropdownOpen(false);
+      window.requestAnimationFrame(() => {
+        navigate(path, options);
+      });
+    },
+    [location.pathname, navigate, pendingNavigation],
+  );
+
+  const activeInsightKey = useMemo(() => {
+    if (
+      selectedType !== "All" &&
+      selectedCategory !== "All" &&
+      (selectedType === "debit" || selectedType === "credit")
+    ) {
+      return `${selectedType}:${selectedCategory}`;
+    }
+
+    return null;
+  }, [selectedType, selectedCategory]);
+
+  const handleInsightSelection = useCallback(
+    (sectionKey, item) => {
+      if (!item || sectionKey === "labels") return;
+
+      setSelectedType(sectionKey);
+      setSelectedCategory(item.name);
+      setFilterOpen(true);
+      requestDataRefresh(
+        {
+          selectedType: sectionKey,
+          selectedCategory: item.name,
+        },
+        1,
+      );
+      window.requestAnimationFrame(() => {
+        transactionsSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    },
+    [requestDataRefresh],
+  );
+
   const resetFilters = () => {
+    setIsLoadingPage(true);
+    setSelectedType("All");
     setSelectedCategory("All");
     setStartDate("");
     setEndDate("");
@@ -473,6 +543,7 @@ useEffect(() => {
     setSortConfig({ key: null, direction: "desc" });
     setCurrentPage(1);
     filtersRef.current = {
+      selectedType: "All",
       selectedCategory: "All",
       startDate: "",
       endDate: "",
@@ -796,13 +867,9 @@ useEffect(() => {
             <span
               title="Clear sort"
               onClick={() => {
-                setSortConfig({ key: null, direction: "desc" });
-                snapshotFilters({
-                  sortConfig: { key: null, direction: "desc" },
-                  currentPage: 1,
-                });
-                setCurrentPage(1);
-                setFetchTrigger((t) => t + 1);
+                const clearedSort = { key: null, direction: "desc" };
+                setSortConfig(clearedSort);
+                requestDataRefresh({ sortConfig: clearedSort }, 1);
               }}
               style={{
                 cursor: "pointer",
@@ -833,6 +900,9 @@ useEffect(() => {
   return (
     <>
       {isInitialLoad && <LoadingOverlay />}
+      {pendingNavigation && !isInitialLoad && (
+        <LoadingOverlay message={pendingNavigation} />
+      )}
       <div className="container">
         {/* ── Header ── */}
         <div className="header">
@@ -842,16 +912,27 @@ useEffect(() => {
             <div className="button-group">
               <button
                 className="add-btn"
+                disabled={!!pendingNavigation}
                 onClick={() =>
-                  navigate("/add-transaction", {
-                    state: { returnPage: currentPage },
-                  })
+                  navigateWithLoader(
+                    "/add-transaction",
+                    { state: { returnPage: currentPage } },
+                    "Opening transaction form...",
+                  )
                 }
               >
-                + Add Entry
+                {pendingNavigation === "Opening transaction form..." ? (
+                  <span className="btn-with-spinner">
+                    <span className="btn-spinner" aria-hidden="true" />
+                    Opening...
+                  </span>
+                ) : (
+                  "+ Add Entry"
+                )}
               </button>
               <button
                 className="add-btn"
+                disabled={!!pendingNavigation}
                 onClick={() => setFilterOpen((p) => !p)}
               >
                 {filterOpen ? "Hide Filters" : "Show Filters"}
@@ -859,6 +940,7 @@ useEffect(() => {
               <div className="profile-wrapper" ref={dropdownRef}>
                 <button
                   className="profile-btn"
+                  disabled={!!pendingNavigation}
                   onClick={() => setDropdownOpen((o) => !o)}
                   aria-label="Profile menu"
                 >
@@ -881,11 +963,12 @@ useEffect(() => {
                   <div className="profile-menu">
                     {[
                       {
-                        path: "/dashboard",
+                        path: "/expense-tracker",
                         icon: "fa-th-large",
                         label: "Dashboard",
                         sub: "View overview and analytics",
                         cls: "bg-green",
+                        message: "Opening dashboard...",
                       },
                       {
                         path: "/manage-finances",
@@ -893,6 +976,7 @@ useEffect(() => {
                         label: "Contact Ledger",
                         sub: "View all contacts",
                         cls: "bg-blue",
+                        message: "Opening contact ledger...",
                       },
                       {
                         path: "/manage-contacts",
@@ -900,6 +984,7 @@ useEffect(() => {
                         label: "Manage Contacts",
                         sub: "Add and edit contacts",
                         cls: "bg-purple",
+                        message: "Opening contacts...",
                       },
                       {
                         path: "/manage-categories",
@@ -907,6 +992,7 @@ useEffect(() => {
                         label: "Manage Categories",
                         sub: "Organize expenses",
                         cls: "bg-indigo",
+                        message: "Opening categories...",
                       },
                       {
                         path: "/manage-labels",
@@ -914,15 +1000,15 @@ useEffect(() => {
                         label: "Manage Labels",
                         sub: "Create custom labels",
                         cls: "bg-violet",
+                        message: "Opening labels...",
                       },
-                    ].map(({ path, icon, label, sub, cls }) => (
-                      <div
+                    ].map(({ path, icon, label, sub, cls, message }) => (
+                      <button
                         key={path}
+                        type="button"
                         className="profile-item"
-                        onClick={() => {
-                          navigate(path);
-                          setDropdownOpen(false);
-                        }}
+                        disabled={!!pendingNavigation}
+                        onClick={() => navigateWithLoader(path, {}, message)}
                       >
                         <div className={`icon ${cls}`}>
                           <i className={`fas ${icon}`} />
@@ -932,7 +1018,7 @@ useEffect(() => {
                           <small>{sub}</small>
                         </div>
                         <i className="fas fa-chevron-right arrow" />
-                      </div>
+                      </button>
                     ))}
                   </div>
                   <div className="profile-footer">
@@ -949,6 +1035,8 @@ useEffect(() => {
         {/* ── Filter Bar ── */}
         <TransactionFilter
           filterOpen={filterOpen}
+          selectedType={selectedType}
+          setSelectedType={(v) => handleFilterChange(setSelectedType, "selectedType", v)}
           categoryOptions={categoryOptions}
           selectedCategory={selectedCategory}
           setSelectedCategory={(v) =>
@@ -964,8 +1052,8 @@ useEffect(() => {
             handleFilterChange(setSelectedLabel, "selectedLabel", v)
           }
           resetFilters={resetFilters}
-          setCurrentPage={setCurrentPage}
           labelMap={labelMap}
+          loading={isLoadingPage}
         />
 
         {/* ── Summary ── */}
@@ -1023,11 +1111,14 @@ useEffect(() => {
           <DashboardInsights
             analytics={analytics}
             hasActiveFilters={hasActiveFilters}
+            selectedType={selectedType}
+            activeItemKey={activeInsightKey}
+            onSelectItem={handleInsightSelection}
           />
         </div>
 
         {/* ── Table ── */}
-        <div className="table-wrapper">
+        <div className="table-wrapper" ref={transactionsSectionRef}>
           <h2 className="month-heading">
             Transactions
             {isLoadingPage && !isInitialLoad && (

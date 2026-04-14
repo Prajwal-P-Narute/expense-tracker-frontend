@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./DashboardInsights.css";
 
 const CATEGORY_COLORS = [
@@ -22,18 +22,20 @@ const TAB_CONFIG = {
   debit: {
     label: "Debit",
     title: "Debit Categories",
-    subtitle: "Understand which expense categories are taking the biggest share.",
+    subtitle: "See where your spending is concentrated and drill into it instantly.",
     totalLabel: "Debit total",
     tableLabel: "Category",
     emptyMessage: "No debit transactions match the current filters.",
+    interactionHint: "Click a slice, legend item, or breakdown row to load matching debit transactions.",
   },
   credit: {
     label: "Credit",
     title: "Credit Categories",
-    subtitle: "See where your income is coming from at a glance.",
+    subtitle: "Spot your strongest income sources and jump straight to those entries.",
     totalLabel: "Credit total",
     tableLabel: "Category",
     emptyMessage: "No credit transactions match the current filters.",
+    interactionHint: "Click a slice, legend item, or breakdown row to load matching credit transactions.",
   },
   labels: {
     label: "Labels",
@@ -42,6 +44,7 @@ const TAB_CONFIG = {
     totalLabel: "Label total",
     tableLabel: "Label",
     emptyMessage: "No labeled data matches the current filters.",
+    interactionHint: "Label analytics stay in summary mode so you can compare patterns at a glance.",
   },
 };
 
@@ -88,6 +91,33 @@ const normalizeSection = (section = EMPTY_SECTION) => {
     maxAmount,
     items,
   };
+};
+
+const toRadians = (degrees) => ((degrees - 90) * Math.PI) / 180;
+
+const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => ({
+  x: centerX + radius * Math.cos(toRadians(angleInDegrees)),
+  y: centerY + radius * Math.sin(toRadians(angleInDegrees)),
+});
+
+const describePieSlice = (centerX, centerY, radius, startAngle, endAngle) => {
+  const start = polarToCartesian(centerX, centerY, radius, startAngle);
+  const end = polarToCartesian(centerX, centerY, radius, endAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${centerX} ${centerY}`,
+    `L ${start.x} ${start.y}`,
+    `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`,
+    "Z",
+  ].join(" ");
+};
+
+const handleSvgKeyDown = (event, onActivate) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    onActivate();
+  }
 };
 
 function DonutChart({ items, total }) {
@@ -144,8 +174,119 @@ function DonutChart({ items, total }) {
   );
 }
 
-export default function DashboardInsights({ analytics, hasActiveFilters }) {
+function PieChart({
+  items,
+  total,
+  selectedKey,
+  tabKey,
+  onSelectItem,
+  canSelect,
+}) {
+  const segments = useMemo(() => {
+    let currentAngle = 0;
+
+    return items.map((item) => {
+      const sliceAngle = total > 0 ? (item.amount / total) * 360 : 0;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + sliceAngle;
+      currentAngle = endAngle;
+
+      return {
+        item,
+        startAngle,
+        endAngle,
+        midAngle: startAngle + sliceAngle / 2,
+      };
+    });
+  }, [items, total]);
+
+  return (
+    <div className="insights-pie-wrap">
+      <svg
+        className="insights-pie-chart"
+        viewBox="0 0 220 220"
+        role="img"
+        aria-label={`${TAB_CONFIG[tabKey].label} category pie chart`}
+      >
+        <circle cx="110" cy="110" r="96" fill="#eef2ff" />
+        {items.length === 1 ? (
+          <circle
+            cx="110"
+            cy="110"
+            r="96"
+            fill={items[0].resolvedColor}
+            className={`insights-pie-slice ${canSelect ? "interactive" : ""} ${
+              selectedKey === `${tabKey}:${items[0].name}` ? "active" : ""
+            }`}
+            role={canSelect ? "button" : undefined}
+            tabIndex={canSelect ? 0 : undefined}
+            aria-pressed={
+              canSelect ? selectedKey === `${tabKey}:${items[0].name}` : undefined
+            }
+            onClick={canSelect ? () => onSelectItem(items[0]) : undefined}
+            onKeyDown={
+              canSelect
+                ? (event) => handleSvgKeyDown(event, () => onSelectItem(items[0]))
+                : undefined
+            }
+          >
+            <title>{buildTooltip(items[0])}</title>
+          </circle>
+        ) : (
+          segments.map(({ item, startAngle, endAngle, midAngle }) => {
+            const isActive = selectedKey === `${tabKey}:${item.name}`;
+            const offsetDistance = isActive ? 8 : 0;
+            const offsetX = Math.cos(toRadians(midAngle)) * offsetDistance;
+            const offsetY = Math.sin(toRadians(midAngle)) * offsetDistance;
+
+            return (
+              <path
+                key={item.name}
+                d={describePieSlice(110, 110, 96, startAngle, endAngle)}
+                fill={item.resolvedColor}
+                transform={`translate(${offsetX} ${offsetY})`}
+                className={`insights-pie-slice ${
+                  canSelect ? "interactive" : ""
+                } ${isActive ? "active" : ""}`}
+                role={canSelect ? "button" : undefined}
+                tabIndex={canSelect ? 0 : undefined}
+                aria-pressed={canSelect ? isActive : undefined}
+                onClick={canSelect ? () => onSelectItem(item) : undefined}
+                onKeyDown={
+                  canSelect
+                    ? (event) => handleSvgKeyDown(event, () => onSelectItem(item))
+                    : undefined
+                }
+              >
+                <title>{buildTooltip(item)}</title>
+              </path>
+            );
+          })
+        )}
+      </svg>
+
+      <div className="insights-pie-center">
+        <strong>{formatCurrency(total)}</strong>
+        <span>{items.length} slices</span>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardInsights({
+  analytics,
+  hasActiveFilters,
+  selectedType,
+  activeItemKey,
+  onSelectItem,
+}) {
   const [activeTab, setActiveTab] = useState("debit");
+
+  useEffect(() => {
+    if (selectedType === "debit" || selectedType === "credit") {
+      setActiveTab(selectedType);
+    }
+  }, [selectedType]);
 
   const sections = useMemo(
     () => ({
@@ -159,6 +300,7 @@ export default function DashboardInsights({ analytics, hasActiveFilters }) {
   const currentSection = sections[activeTab] || EMPTY_SECTION;
   const currentTab = TAB_CONFIG[activeTab];
   const hasData = currentSection.items.length > 0;
+  const canSelectInsights = activeTab !== "labels" && typeof onSelectItem === "function";
 
   return (
     <section className="insights-panel">
@@ -203,62 +345,68 @@ export default function DashboardInsights({ analytics, hasActiveFilters }) {
           </div>
 
           {hasData ? (
-            activeTab === "labels" ? (
-              <div className="insights-label-chart">
-                <DonutChart items={currentSection.items} total={currentSection.total} />
-                <div className="insights-legend">
-                  {currentSection.items.map((item) => (
-                    <div
-                      key={item.name}
-                      className="insights-legend-item"
-                      title={buildTooltip(item)}
-                    >
-                      <span
-                        className="insights-legend-swatch"
-                        style={{ backgroundColor: item.resolvedColor }}
-                      />
-                      <div>
-                        <strong>{item.name}</strong>
-                        <span>{formatPercentage(item.percentage)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="insights-bar-chart-scroll">
-                <div className="insights-bar-chart">
-                  {currentSection.items.map((item) => {
-                    const relativeHeight =
-                      currentSection.maxAmount > 0
-                        ? Math.max((item.amount / currentSection.maxAmount) * 100, 10)
-                        : 0;
+            <>
+              <div className="insights-visual-layout">
+                {activeTab === "labels" ? (
+                  <DonutChart items={currentSection.items} total={currentSection.total} />
+                ) : (
+                  <PieChart
+                    items={currentSection.items}
+                    total={currentSection.total}
+                    tabKey={activeTab}
+                    selectedKey={activeItemKey}
+                    canSelect={canSelectInsights}
+                    onSelectItem={(item) => onSelectItem(activeTab, item)}
+                  />
+                )}
 
-                    return (
-                      <div key={item.name} className="insights-bar-column">
-                        <div className="insights-bar-topline">
-                          <span>{formatPercentage(item.percentage)}</span>
-                          <strong>{formatCurrency(item.amount)}</strong>
+                <div className="insights-legend">
+                  {currentSection.items.map((item) => {
+                    const isActive = activeItemKey === `${activeTab}:${item.name}`;
+                    const content = (
+                      <>
+                        <span
+                          className="insights-legend-swatch"
+                          style={{ backgroundColor: item.resolvedColor }}
+                        />
+                        <div>
+                          <strong>{item.name}</strong>
+                          <span>
+                            {formatPercentage(item.percentage)} • {formatCurrency(item.amount)}
+                          </span>
                         </div>
-                        <div className="insights-bar-shell">
-                          <div
-                            className="insights-bar-fill"
-                            style={{
-                              height: `${relativeHeight}%`,
-                              background: `linear-gradient(180deg, ${item.resolvedColor}, ${item.resolvedColor}cc)`,
-                            }}
-                            title={buildTooltip(item)}
-                          />
-                        </div>
-                        <div className="insights-bar-label" title={item.name}>
-                          {item.name}
-                        </div>
+                      </>
+                    );
+
+                    return canSelectInsights ? (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className={`insights-legend-item interactive ${
+                          isActive ? "active" : ""
+                        }`}
+                        title={buildTooltip(item)}
+                        onClick={() => onSelectItem(activeTab, item)}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      <div
+                        key={item.name}
+                        className="insights-legend-item"
+                        title={buildTooltip(item)}
+                      >
+                        {content}
                       </div>
                     );
                   })}
                 </div>
               </div>
-            )
+
+              <div className="insights-click-hint">
+                {currentTab.interactionHint}
+              </div>
+            </>
           ) : (
             <div className="insights-empty-state">{currentTab.emptyMessage}</div>
           )}
@@ -284,33 +432,49 @@ export default function DashboardInsights({ analytics, hasActiveFilters }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentSection.items.map((item) => (
-                    <tr key={item.name} title={buildTooltip(item)}>
-                      <td>
-                        <div className="insights-name-cell">
-                          <span
-                            className="insights-name-dot"
-                            style={{ backgroundColor: item.resolvedColor }}
-                          />
-                          <span>{item.name}</span>
-                        </div>
-                      </td>
-                      <td>{formatCurrency(item.amount)}</td>
-                      <td>{formatPercentage(item.percentage)}</td>
-                      <td>
-                        <div className="insights-progress-track">
-                          <div
-                            className="insights-progress-fill"
-                            style={{
-                              width: `${Math.min(item.percentage, 100)}%`,
-                              background: `linear-gradient(90deg, ${item.resolvedColor}, ${item.resolvedColor}cc)`,
-                            }}
-                            title={buildTooltip(item)}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {currentSection.items.map((item) => {
+                    const isActive = activeItemKey === `${activeTab}:${item.name}`;
+                    const rowClassName = canSelectInsights
+                      ? `insights-clickable-row ${isActive ? "active" : ""}`
+                      : "";
+
+                    return (
+                      <tr
+                        key={item.name}
+                        className={rowClassName}
+                        title={buildTooltip(item)}
+                        onClick={
+                          canSelectInsights
+                            ? () => onSelectItem(activeTab, item)
+                            : undefined
+                        }
+                      >
+                        <td>
+                          <div className="insights-name-cell">
+                            <span
+                              className="insights-name-dot"
+                              style={{ backgroundColor: item.resolvedColor }}
+                            />
+                            <span>{item.name}</span>
+                          </div>
+                        </td>
+                        <td>{formatCurrency(item.amount)}</td>
+                        <td>{formatPercentage(item.percentage)}</td>
+                        <td>
+                          <div className="insights-progress-track">
+                            <div
+                              className="insights-progress-fill"
+                              style={{
+                                width: `${Math.min(item.percentage, 100)}%`,
+                                background: `linear-gradient(90deg, ${item.resolvedColor}, ${item.resolvedColor}cc)`,
+                              }}
+                              title={buildTooltip(item)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>

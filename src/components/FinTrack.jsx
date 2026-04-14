@@ -40,6 +40,7 @@ const FinTrack = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [pendingNavigation, setPendingNavigation] = useState("");
 
   // Use ref to track if initial load has been done
   const initialLoadDone = useRef(false);
@@ -156,6 +157,17 @@ const FinTrack = () => {
       state: { transaction, isContactTransaction: true },
     });
   };
+
+  const navigateWithLoader = useCallback(
+    (path, options = {}, message = "Opening...") => {
+      if (pendingNavigation) return;
+      setPendingNavigation(message);
+      window.requestAnimationFrame(() => {
+        navigate(path, options);
+      });
+    },
+    [navigate, pendingNavigation],
+  );
 
   const handleDelete = (transaction) => {
     setTransactionToDelete(transaction);
@@ -422,6 +434,12 @@ const FinTrack = () => {
 
   return (
     <>
+      {pendingNavigation && (
+        <div className="fintrack-nav-overlay">
+          <div className="fintrack-nav-spinner" />
+          <p>{pendingNavigation}</p>
+        </div>
+      )}
       <div className={`fintrack-container`}>
         <header>
           <div className="logo">
@@ -429,15 +447,20 @@ const FinTrack = () => {
             <span>Contact Ledger</span>
           </div>
           <div className="controls">
-            <button className="btn btn-secondary" onClick={() => navigate("/")}>
+            <button
+              className="btn btn-secondary"
+              disabled={!!pendingNavigation}
+              onClick={() => navigateWithLoader("/", {}, "Returning to dashboard...")}
+            >
               <i className="fas fa-home"></i> Home
             </button>
             <button
               className="btn btn-primary"
+              disabled={!!pendingNavigation}
               onClick={() =>
-                navigate("/add-transaction", {
+                navigateWithLoader("/add-transaction", {
                   state: { isContactTransaction: true },
-                })
+                }, "Opening contact transaction form...")
               }
             >
               <i className="fas fa-plus"></i> Add Transaction

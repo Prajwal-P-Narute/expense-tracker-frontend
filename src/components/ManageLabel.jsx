@@ -42,6 +42,9 @@ export default function ManageLabel() {
   const [editColor, setEditColor] = useState(colorOptions[0]);
   const [transferTo, setTransferTo] = useState("");
   const [cancelDeleteModal, setCancelDeleteModal] = useState(false);
+  const [creatingLabel, setCreatingLabel] = useState(false);
+  const [savingLabel, setSavingLabel] = useState(false);
+  const [deletingLabel, setDeletingLabel] = useState(false);
 
 
   const reload = async () => {
@@ -63,6 +66,7 @@ export default function ManageLabel() {
     e.preventDefault();
     if (!newLabel.trim()) return;
     try {
+      setCreatingLabel(true);
       await createLabel({ name: newLabel.trim(), color: newColor });
       setNewLabel("");
       setNewColor(colorOptions[0]); // reset
@@ -70,6 +74,8 @@ export default function ManageLabel() {
       toast.success("Label created");
     } catch (err) {
       toast.error(err.message || "Failed to create label");
+    } finally {
+      setCreatingLabel(false);
     }
   };
 
@@ -86,6 +92,7 @@ export default function ManageLabel() {
     e.preventDefault();
     if (!editName.trim()) return;
     try {
+      setSavingLabel(true);
       await updateLabel(selectedLabel.id, {
         name: editName.trim(),
         color: editColor,
@@ -95,6 +102,8 @@ export default function ManageLabel() {
       toast.success("Label updated");
     } catch {
       toast.error("Failed to update label");
+    } finally {
+      setSavingLabel(false);
     }
   };
 
@@ -118,6 +127,7 @@ export default function ManageLabel() {
       return;
     }
     try {
+      setDeletingLabel(true);
       await deleteLabel(
         selectedLabel.id,
         usedCount > 0 ? transferTo : undefined
@@ -130,6 +140,8 @@ export default function ManageLabel() {
       toast.success("Label deleted");
     } catch (err) {
       toast.error(err.message || "Failed to delete label");
+    } finally {
+      setDeletingLabel(false);
     }
   };
 
@@ -156,19 +168,38 @@ export default function ManageLabel() {
             placeholder="Enter a new label name"
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
+            disabled={creatingLabel}
           />
           <div className="color-picker">
             {colorOptions.map((c) => (
               <div
                 key={c}
-                className={`color-option ${newColor === c ? "selected" : ""}`}
+                className={`color-option ${newColor === c ? "selected" : ""} ${
+                  creatingLabel ? "disabled" : ""
+                }`}
                 style={{ backgroundColor: c }}
-                onClick={() => setNewColor(c)}
+                onClick={() => {
+                  if (creatingLabel) return;
+                  setNewColor(c);
+                }}
               />
             ))}
           </div>
-          <button type="submit" className="add-btn">
-            <FaPlus /> Add Label
+          <button
+            type="submit"
+            className="add-btn btn-with-spinner"
+            disabled={creatingLabel}
+          >
+            {creatingLabel ? (
+              <>
+                <span className="btn-spinner" aria-hidden="true" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <FaPlus /> Add Label
+              </>
+            )}
           </button>
         </form>
 
@@ -237,6 +268,7 @@ export default function ManageLabel() {
                   className="form-control"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
+                  disabled={savingLabel}
                 />
               </div>
               <div className="form-group">
@@ -247,9 +279,12 @@ export default function ManageLabel() {
                       key={color}
                       className={`color-option ${
                         editColor === color ? "selected" : ""
-                      }`}
+                      } ${savingLabel ? "disabled" : ""}`}
                       style={{ backgroundColor: color }}
-                      onClick={() => setEditColor(color)}
+                      onClick={() => {
+                        if (savingLabel) return;
+                        setEditColor(color);
+                      }}
                     />
                   ))}
                 </div>
@@ -258,12 +293,26 @@ export default function ManageLabel() {
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={savingLabel}
                   onClick={() => setEditModal(false)}
                 >
                   <FaTimes /> Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  <FaSave /> Save Changes
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-with-spinner"
+                  disabled={savingLabel}
+                >
+                  {savingLabel ? (
+                    <>
+                      <span className="btn-spinner" aria-hidden="true" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FaSave /> Save Changes
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -306,6 +355,7 @@ export default function ManageLabel() {
                     className="form-control"
                     value={transferTo}
                     onChange={(e) => setTransferTo(e.target.value)}
+                    disabled={deletingLabel}
                   >
                     <option value="">Select a label</option>
                     {labels
@@ -322,12 +372,26 @@ export default function ManageLabel() {
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={deletingLabel}
                   onClick={() => setDeleteModal(false)}
                 >
                   <FaTimes /> Cancel
                 </button>
-                <button type="submit" className="btn btn-danger">
-                  <FaTrash /> Delete Label
+                <button
+                  type="submit"
+                  className="btn btn-danger btn-with-spinner"
+                  disabled={deletingLabel}
+                >
+                  {deletingLabel ? (
+                    <>
+                      <span className="btn-spinner" aria-hidden="true" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <FaTrash /> Delete Label
+                    </>
+                  )}
                 </button>
               </div>
             </form>

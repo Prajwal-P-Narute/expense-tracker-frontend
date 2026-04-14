@@ -1,0 +1,33 @@
+.btn-with-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-spinner,
+.inline-spinner {
+  display: inline-block;
+  border-radius: 999px;
+  animation: codex-spin 0.75s linear infinite;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+}
+
+.inline-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(67, 97, 238, 0.18);
+  border-top-color: #4361ee;
+}
+
+@keyframes codex-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
