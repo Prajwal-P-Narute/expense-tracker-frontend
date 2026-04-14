@@ -208,7 +208,7 @@ const TransactionForm = () => {
     <div className="container">
       <div className="header">
         <h1>{isEditMode ? "Edit Transaction" : "Add New Transaction"}</h1>
-        <button className="back-btn" onClick={() => navigate(-1)}>
+        <button className="back-btn" disabled={submitting} onClick={() => navigate(-1)}>
           ← Back
         </button>
       </div>
@@ -223,6 +223,7 @@ const TransactionForm = () => {
             name="date"
             value={formData.date}
             onChange={handleChange}
+            disabled={submitting}
           />
         </div>
 
@@ -233,7 +234,7 @@ const TransactionForm = () => {
               type === "debit" ? "active" : ""
             }`}
             onClick={() => handleTypeToggle("debit")}
-            disabled={isEditMode && isContactTransactionOnLoad}
+            disabled={submitting || (isEditMode && isContactTransactionOnLoad)}
           >
             Debit
           </button>
@@ -243,7 +244,7 @@ const TransactionForm = () => {
               type === "credit" ? "active" : ""
             }`}
             onClick={() => handleTypeToggle("credit")}
-            disabled={isEditMode && isContactTransactionOnLoad}
+            disabled={submitting || (isEditMode && isContactTransactionOnLoad)}
           >
             Credit
           </button>
@@ -267,6 +268,7 @@ const TransactionForm = () => {
                 name="debitCategory"
                 value={formData.debitCategory}
                 onChange={handleChange}
+                disabled={submitting}
               >
                 <option value="">-- Select --</option>
                 {debitCats.map((c) => (
@@ -286,6 +288,7 @@ const TransactionForm = () => {
                   id="contactId"
                   value={selectedContactId}
                   onChange={(e) => setSelectedContactId(e.target.value)}
+                  disabled={submitting}
                 >
                   <option value="">-- Select --</option>
                   {allContacts.map((c) => (
@@ -307,6 +310,7 @@ const TransactionForm = () => {
                 value={formData.debitAmount}
                 onChange={handleChange}
                 placeholder="0.00"
+                disabled={submitting}
               />
             </div>
           </div>
@@ -327,6 +331,7 @@ const TransactionForm = () => {
                 name="creditCategory"
                 value={formData.creditCategory}
                 onChange={handleChange}
+                disabled={submitting}
               >
                 <option value="">-- Select --</option>
                 {creditCats.map((c) => (
@@ -346,6 +351,7 @@ const TransactionForm = () => {
                   id="contactId"
                   value={selectedContactId}
                   onChange={(e) => setSelectedContactId(e.target.value)}
+                  disabled={submitting}
                 >
                   <option value="">-- Select --</option>
                   {allContacts.map((c) => (
@@ -367,6 +373,7 @@ const TransactionForm = () => {
                 value={formData.creditAmount}
                 onChange={handleChange}
                 placeholder="0.00"
+                disabled={submitting}
               />
             </div>
           </div>
@@ -380,6 +387,7 @@ const TransactionForm = () => {
             value={formData.comments}
             onChange={handleChange}
             rows="3"
+            disabled={submitting}
           ></textarea>
         </div>
 
@@ -399,6 +407,7 @@ const TransactionForm = () => {
                     value={l.id}
                     checked={selectedLabelIds.includes(l.id)}
                     onChange={() => handleLabelChange(l.id)}
+                    disabled={submitting}
                   />
                   {l.name}
                 </label>
@@ -409,10 +418,13 @@ const TransactionForm = () => {
           </div>
         </div>
 
-        <button type="submit" className="submit-btn" disabled={submitting}>
-          {submitting
-            ? "Saving..."
-            : isEditMode
+        <button type="submit" className="submit-btn btn-with-spinner" disabled={submitting}>
+          {submitting ? (
+            <>
+              <span className="btn-spinner" aria-hidden="true" />
+              Saving and redirecting...
+            </>
+          ) : isEditMode
               ? "Update Transaction"
               : "Add Transaction"}
         </button>

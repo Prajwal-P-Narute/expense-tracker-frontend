@@ -78,6 +78,13 @@
   gap: 8px;
 }
 
+.fintrack-container .btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
 .fintrack-container .btn-secondary {
   background: var(--primary);
   color: #ffffff;
@@ -115,6 +122,33 @@
 .fintrack-container .btn:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow);
+}
+
+.fintrack-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(255, 255, 255, 0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  backdrop-filter: blur(3px);
+}
+
+.fintrack-nav-spinner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid rgba(67, 97, 238, 0.18);
+  border-top-color: #4361ee;
+  animation: codex-spin 0.75s linear infinite;
+}
+
+.fintrack-nav-overlay p {
+  color: #2f4bd8;
+  font-weight: 700;
 }
 
 .fintrack-container .dashboard {

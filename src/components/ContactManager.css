@@ -50,6 +50,14 @@
     background: #218838;
 }
 
+.btn-add-new:disabled,
+.manager-container .btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .contact-list {
     background: white;
     border-radius: 10px;
@@ -243,5 +251,4 @@
   border: 1px solid #d32f2f !important;
   background-color: #fff5f5;
 }
-
 

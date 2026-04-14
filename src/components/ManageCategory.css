@@ -110,6 +110,14 @@ h2 {
     background: #2980b9;
 }
 
+.add-btn:disabled,
+.btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 /* Category List */
 .category-list {
     list-style-type: none;
@@ -377,6 +385,11 @@ h2 {
   background-color: #3498db;
   color: white;
   border: 1px solid #3498db;
+}
+
+.toggle-group span.disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .radio-group {

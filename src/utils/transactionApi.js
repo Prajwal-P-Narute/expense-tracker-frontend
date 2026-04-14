@@ -10,6 +10,8 @@ const authHeaders = () => ({
 
 function buildTransactionFilterParams(filters = {}, includeSort = false) {
   const params = new URLSearchParams();
+  let typeFilter =
+    filters.typeFilter && filters.typeFilter !== "All" ? filters.typeFilter : "";
 
   if (filters.category && filters.category !== "All")
     params.append("category", filters.category);
@@ -31,12 +33,12 @@ function buildTransactionFilterParams(filters = {}, includeSort = false) {
 
   if (filters.search?.debit?.trim()) {
     params.append("amountSearch", filters.search.debit.trim());
-    params.append("typeFilter", "debit");
+    typeFilter = "debit";
   }
 
   if (filters.search?.credit?.trim()) {
     params.append("amountSearch", filters.search.credit.trim());
-    params.append("typeFilter", "credit");
+    typeFilter = "credit";
   }
 
   if (filters.search?.balance?.trim())
@@ -47,18 +49,22 @@ function buildTransactionFilterParams(filters = {}, includeSort = false) {
       params.append("sortBy", "amount");
       params.append("sortDir", filters.sortDir || "desc");
       if (!filters.search?.debit?.trim()) {
-        params.append("typeFilter", "debit");
+        typeFilter = "debit";
       }
     } else if (filters.sortBy === "credit") {
       params.append("sortBy", "amount");
       params.append("sortDir", filters.sortDir || "desc");
       if (!filters.search?.credit?.trim()) {
-        params.append("typeFilter", "credit");
+        typeFilter = "credit";
       }
     } else {
       params.append("sortBy", filters.sortBy);
       params.append("sortDir", filters.sortDir || "desc");
     }
+  }
+
+  if (typeFilter) {
+    params.append("typeFilter", typeFilter);
   }
 
   return params;

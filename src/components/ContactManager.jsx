@@ -22,6 +22,8 @@ const ContactManager = () => {
   const [errors, setErrors] = useState({});
   const nameInputRef = useRef(null);
   const [touched, setTouched] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -148,6 +150,7 @@ const ContactManager = () => {
   }
 
   try {
+    setSubmitting(true);
     if (isEditMode) {
       await updateContact(currentContact.id, formData);
       toast.success("Contact updated successfully!");
@@ -164,18 +167,23 @@ const ContactManager = () => {
     } else {
       toast.error(error.message || "An error occurred.");
     }
+  } finally {
+    setSubmitting(false);
   }
 };
 
 
   const handleDelete = async () => {
     try {
+      setDeleting(true);
       await deleteContact(currentContact.id);
       toast.success("Contact deleted successfully!");
       handleCloseModals();
       await loadData();
     } catch (error) {
       toast.error(error.message || "Failed to delete contact.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -257,6 +265,7 @@ const ContactManager = () => {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Enter contact's name"
+                  disabled={submitting}
                 />
                 {touched.name && errors.name && (
                   <div className="error-message">{errors.name}</div>
@@ -272,6 +281,7 @@ const ContactManager = () => {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Enter email address (optional)"
+                  disabled={submitting}
                 />
                 {touched.email && errors.email && (
                   <div className="error-message">{errors.email}</div>
@@ -288,6 +298,7 @@ const ContactManager = () => {
                   value={formData.mobNo}
                   onChange={handleChange}
                   placeholder="Enter mobile number (optional)"
+                  disabled={submitting}
                 />
                 {touched.mobNo && errors.mobNo && (
                   <div className="error-message">{errors.mobNo}</div>
@@ -298,12 +309,24 @@ const ContactManager = () => {
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={submitting}
                   onClick={handleCloseModals}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {isEditMode ? "Save Changes" : "Add Contact"}
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-with-spinner"
+                  disabled={submitting}
+                >
+                  {submitting && <span className="btn-spinner" aria-hidden="true" />}
+                  {submitting
+                    ? isEditMode
+                      ? "Saving..."
+                      : "Adding..."
+                    : isEditMode
+                      ? "Save Changes"
+                      : "Add Contact"}
                 </button>
               </div>
             </form>
@@ -330,16 +353,19 @@ const ContactManager = () => {
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={deleting}
                 onClick={handleCloseModals}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn btn-danger"
+                className="btn btn-danger btn-with-spinner"
+                disabled={deleting}
                 onClick={handleDelete}
               >
-                Delete
+                {deleting && <span className="btn-spinner" aria-hidden="true" />}
+                {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

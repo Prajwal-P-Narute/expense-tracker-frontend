@@ -1,10 +1,12 @@
 .insights-panel {
   margin-top: 28px;
-  background: #fff;
+  background:
+    radial-gradient(circle at top right, rgba(67, 97, 238, 0.12), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   border: 1px solid #e5eafc;
-  border-radius: 18px;
+  border-radius: 24px;
   padding: 28px;
-  box-shadow: 0 18px 38px rgba(67, 97, 238, 0.08);
+  box-shadow: 0 24px 48px rgba(67, 97, 238, 0.1);
 }
 
 .insights-header {
@@ -42,7 +44,7 @@
   border-radius: 999px;
   padding: 7px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .insights-tabs {
@@ -51,14 +53,14 @@
   gap: 8px;
   background: #f6f8ff;
   padding: 6px;
-  border-radius: 14px;
+  border-radius: 16px;
 }
 
 .insights-tab {
   background: transparent;
   color: #5b6480;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 700;
@@ -72,7 +74,7 @@
 .insights-tab.active {
   background: linear-gradient(135deg, var(--primary-color), var(--dark-color));
   color: #fff;
-  box-shadow: 0 10px 22px rgba(67, 97, 238, 0.22);
+  box-shadow: 0 12px 24px rgba(67, 97, 238, 0.24);
 }
 
 .insights-body {
@@ -86,7 +88,7 @@
 .insights-breakdown-card {
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   border: 1px solid #edf1ff;
-  border-radius: 18px;
+  border-radius: 22px;
   padding: 22px;
 }
 
@@ -115,8 +117,8 @@
 .insights-chart-total {
   min-width: 180px;
   padding: 14px 16px;
-  border-radius: 16px;
-  background: #f4f7ff;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f4f7ff, #ffffff);
   border: 1px solid #dce5ff;
   text-align: right;
 }
@@ -135,104 +137,44 @@
   font-size: 22px;
 }
 
-.insights-bar-chart-scroll {
-  overflow-x: auto;
-  padding-bottom: 6px;
-}
-
-.insights-bar-chart {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(120px, 1fr);
-  gap: 18px;
-  min-height: 320px;
-}
-
-.insights-bar-column {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-width: 120px;
-}
-
-.insights-bar-topline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.insights-bar-topline span {
-  color: #5b6480;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.insights-bar-topline strong {
-  color: #1f2a44;
-  font-size: 14px;
-}
-
-.insights-bar-shell {
-  height: 220px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 14px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f7f9ff 0%, #eef3ff 100%);
-  border: 1px solid #e0e8ff;
-}
-
-.insights-bar-fill {
-  width: 100%;
-  max-width: 68px;
-  min-height: 18px;
-  border-radius: 22px 22px 10px 10px;
-  box-shadow: 0 14px 28px rgba(67, 97, 238, 0.18);
-  transition: transform 0.2s ease;
-}
-
-.insights-bar-fill:hover,
-.insights-donut-segment:hover {
-  transform: translateY(-2px);
-}
-
-.insights-bar-label {
-  margin-top: 12px;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  word-break: break-word;
-}
-
-.insights-label-chart {
+.insights-visual-layout {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 22px;
   align-items: center;
 }
 
+.insights-pie-wrap,
 .insights-donut-wrap {
   position: relative;
   width: min(100%, 320px);
   margin: 0 auto;
 }
 
+.insights-pie-chart,
 .insights-donut-chart {
   width: 100%;
   height: auto;
 }
 
+.insights-pie-slice,
 .insights-donut-segment {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
 }
 
+.insights-pie-slice.interactive,
+.insights-clickable-row,
+.insights-legend-item.interactive {
+  cursor: pointer;
+}
+
+.insights-pie-slice.interactive:hover,
+.insights-pie-slice.active,
 .insights-donut-segment:hover {
-  opacity: 0.92;
+  filter: brightness(1.04);
 }
 
+.insights-pie-center,
 .insights-donut-center {
   position: absolute;
   inset: 0;
@@ -241,14 +183,17 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
+  pointer-events: none;
 }
 
+.insights-pie-center strong,
 .insights-donut-center strong {
   color: var(--dark-color);
   font-size: 24px;
   text-align: center;
 }
 
+.insights-pie-center span,
 .insights-donut-center span {
   color: #64748b;
   font-size: 13px;
@@ -266,9 +211,22 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #f8faff;
   border: 1px solid #e5ebff;
+  width: 100%;
+  text-align: left;
+}
+
+.insights-legend-item.interactive {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.insights-legend-item.interactive:hover,
+.insights-legend-item.active {
+  transform: translateY(-1px);
+  border-color: #b7c7ff;
+  box-shadow: 0 12px 24px rgba(67, 97, 238, 0.12);
 }
 
 .insights-legend-swatch,
@@ -288,6 +246,17 @@
 .insights-legend-item span {
   color: #64748b;
   font-size: 13px;
+}
+
+.insights-click-hint {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eef3ff, #f9fbff);
+  border: 1px solid #d8e3ff;
+  color: #49607f;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .insights-breakdown-table-wrap {
@@ -317,8 +286,13 @@
   color: #24324b;
 }
 
-.insights-breakdown-table tbody tr:hover {
+.insights-breakdown-table tbody tr:hover,
+.insights-clickable-row.active {
   background: #f8faff;
+}
+
+.insights-clickable-row.active td:first-child {
+  border-left: 3px solid var(--primary-color);
 }
 
 .insights-breakdown-table tfoot td {
@@ -373,7 +347,7 @@
     grid-template-columns: 1fr;
   }
 
-  .insights-label-chart {
+  .insights-visual-layout {
     grid-template-columns: 1fr;
   }
 
@@ -406,15 +380,6 @@
     flex: 1 1 calc(33.33% - 8px);
     min-width: 90px;
   }
-
-  .insights-bar-chart {
-    grid-auto-columns: minmax(108px, 1fr);
-    min-height: 280px;
-  }
-
-  .insights-bar-shell {
-    height: 200px;
-  }
 }
 
 @media (max-width: 480px) {
@@ -437,6 +402,7 @@
     min-width: 90px;
   }
 
+  .insights-pie-center strong,
   .insights-donut-center strong {
     font-size: 21px;
   }

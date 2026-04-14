@@ -25,6 +25,9 @@ const ManageCategory = () => {
     debit: { type: "", status: null },
     credit: { type: "", status: null },
   });
+  const [addingSection, setAddingSection] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState(false);
 
   const editInputRef = useRef(null);
   const [usageCount, setUsageCount] = useState(0);
@@ -69,6 +72,7 @@ const ManageCategory = () => {
       return;
     }
     try {
+      setAddingSection(sectionType);
       await createCategory(name, sectionType, catStatus ?? "");
       toast.success("Category added");
       input.value = "";
@@ -79,6 +83,8 @@ const ManageCategory = () => {
       await load();
     } catch (e) {
       toast.error(e.message || "Failed to add category");
+    } finally {
+      setAddingSection("");
     }
   };
 
@@ -114,6 +120,7 @@ const ManageCategory = () => {
     }
 
     try {
+      setSavingEdit(true);
       // Only handle status updates if category was created with a status
       if (currentCategory.status) {
         // Check if status is being disabled
@@ -155,12 +162,15 @@ const ManageCategory = () => {
     } catch (e) {
       console.error("Update error:", e);
       toast.error(e.message || "Update failed");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
   const handleDeleteCategory = async (e) => {
     e.preventDefault();
     try {
+      setDeletingCategory(true);
       if (usageCount > 0 && !transferCategoryId) {
         alert("Please select a category to transfer transactions to");
         return;
@@ -175,6 +185,8 @@ const ManageCategory = () => {
       await load();
     } catch (e) {
       toast.error(e.message || "Delete failed");
+    } finally {
+      setDeletingCategory(false);
     }
   };
 
@@ -198,23 +210,27 @@ const ManageCategory = () => {
           type="text"
           className="add-category-input"
           placeholder={`Add new ${sectionType} category`}
+          disabled={addingSection === sectionType}
         />
 
         <div className="toggle-group">
           {sectionType === "debit" && (
             <span
               className={
-                categoryType[sectionType].status === "given" ? "active" : ""
+                `${categoryType[sectionType].status === "given" ? "active" : ""} ${
+                  addingSection === sectionType ? "disabled" : ""
+                }`
               }
-              onClick={() =>
+              onClick={() => {
+                if (addingSection === sectionType) return;
                 setCategoryType((prev) => ({
                   ...prev,
                   debit:
                     prev.debit.status === "given"
                       ? { type: "debit", status: null }
                       : { type: "debit", status: "given" },
-                }))
-              }
+                }));
+              }}
             >
               Given
             </span>
@@ -222,25 +238,33 @@ const ManageCategory = () => {
           {sectionType === "credit" && (
             <span
               className={
-                categoryType[sectionType].status === "received" ? "active" : ""
+                `${categoryType[sectionType].status === "received" ? "active" : ""} ${
+                  addingSection === sectionType ? "disabled" : ""
+                }`
               }
-              onClick={() =>
+              onClick={() => {
+                if (addingSection === sectionType) return;
                 setCategoryType((prev) => ({
                   ...prev,
                   credit:
                     prev.credit.status === "received"
                       ? { type: "credit", status: null }
                       : { type: "credit", status: "received" },
-                }))
-              }
+                }));
+              }}
             >
               Received
             </span>
           )}
         </div>
 
-        <button type="submit" className="add-btn">
-          Add
+        <button
+          type="submit"
+          className="add-btn btn-with-spinner"
+          disabled={addingSection === sectionType}
+        >
+          {addingSection === sectionType && <span className="btn-spinner" aria-hidden="true" />}
+          {addingSection === sectionType ? "Adding..." : "Add"}
         </button>
       </form>
 
@@ -319,6 +343,7 @@ const ManageCategory = () => {
                   value={editCategoryName}
                   onChange={(e) => setEditCategoryName(e.target.value)}
                   placeholder="Enter category name"
+                  disabled={savingEdit}
                 />
               </div>
 
@@ -329,26 +354,30 @@ const ManageCategory = () => {
                   <div className="toggle-group">
                     {currentCategory?.type === "debit" && (
                       <span
-                        className={editCategoryStatus === "given" ? "active" : ""}
-                        onClick={() =>
+                        className={`${editCategoryStatus === "given" ? "active" : ""} ${
+                          savingEdit ? "disabled" : ""
+                        }`}
+                        onClick={() => {
+                          if (savingEdit) return;
                           setEditCategoryStatus(
                             editCategoryStatus === "given" ? null : "given"
-                          )
-                        }
+                          );
+                        }}
                       >
                         Given
                       </span>
                     )}
                     {currentCategory?.type === "credit" && (
                       <span
-                        className={
+                        className={`${
                           editCategoryStatus === "received" ? "active" : ""
-                        }
-                        onClick={() =>
+                        } ${savingEdit ? "disabled" : ""}`}
+                        onClick={() => {
+                          if (savingEdit) return;
                           setEditCategoryStatus(
                             editCategoryStatus === "received" ? null : "received"
-                          )
-                        }
+                          );
+                        }}
                       >
                         Received
                       </span>
@@ -366,12 +395,18 @@ const ManageCategory = () => {
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={savingEdit}
                   onClick={() => setShowEditModal(false)}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Changes
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-with-spinner"
+                  disabled={savingEdit}
+                >
+                  {savingEdit && <span className="btn-spinner" aria-hidden="true" />}
+                  {savingEdit ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -437,6 +472,7 @@ const ManageCategory = () => {
                     <button
                       type="button"
                       className="btn btn-secondary"
+                      disabled={deletingCategory}
                       onClick={() => setShowDeleteModal(false)}
                     >
                       Cancel
@@ -444,9 +480,16 @@ const ManageCategory = () => {
                     <button
                       type="submit"
                       className="btn btn-danger"
-                      disabled={!transferCategoryId}
+                      disabled={!transferCategoryId || deletingCategory}
                     >
-                      Delete Category
+                      {deletingCategory ? (
+                        <span className="btn-with-spinner">
+                          <span className="btn-spinner" aria-hidden="true" />
+                          Deleting...
+                        </span>
+                      ) : (
+                        "Delete Category"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -462,6 +505,7 @@ const ManageCategory = () => {
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    disabled={deletingCategory}
                     onClick={() => setShowDeleteModal(false)}
                   >
                     Cancel
@@ -469,9 +513,17 @@ const ManageCategory = () => {
                   <button
                     type="button"
                     className="btn btn-danger"
+                    disabled={deletingCategory}
                     onClick={handleDeleteCategory}
                   >
-                    Delete Category
+                    {deletingCategory ? (
+                      <span className="btn-with-spinner">
+                        <span className="btn-spinner" aria-hidden="true" />
+                        Deleting...
+                      </span>
+                    ) : (
+                      "Delete Category"
+                    )}
                   </button>
                 </div>
               </>
