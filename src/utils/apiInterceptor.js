@@ -1,87 +1,88 @@
 // src/utils/apiInterceptor.js
 import { toast } from "react-toastify";
 
+// Guard: once we've triggered the session-expired flow, ignore all subsequent 401/403s
+let sessionExpiredHandled = false;
+
+const isAuthError = (status) => status === 401 || status === 403;
+
 /**
- * Centralized API response interceptor that handles token expiration
- * Automatically clears storage and redirects to login when token expires
+ * Centralized API response interceptor that handles token expiration.
+ * Treats both 401 and 403 as "session expired" — Spring Security can return
+ * either depending on whether the JWT filter populated the security context.
+ * Only the FIRST such error among concurrent requests shows a toast + redirect.
  */
 export const handleApiResponse = async (response) => {
-  // If response is 401 Unauthorized, clear session and redirect
-  if (response.status === 401) {
-    // Clear all storage
-    localStorage.removeItem("token");
-    sessionStorage.clear();
-    
-    // Set a flag to show toast on login page
-    sessionStorage.setItem("sessionExpired", "true");
-    
-    // Show toast notification with countdown
-    let countdown = 3;
-    const toastId = toast.error(
-      `Session expired. Redirecting to login in ${countdown} seconds...`,
-      {
-        position: "top-center",
-        autoClose: false,
-        hideProgressBar: false,
-        closeOnClick: false,
-        pauseOnHover: false,
-        draggable: false,
-      }
-    );
-    
-    // Update countdown every second
-    const countdownInterval = setInterval(() => {
-      countdown--;
-      if (countdown > 0) {
-        toast.update(toastId, {
-          render: `Session expired. Redirecting to login in ${countdown} seconds...`,
-        });
-      } else {
+  if (isAuthError(response.status)) {
+    if (!sessionExpiredHandled) {
+      sessionExpiredHandled = true;
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("userName");
+      sessionStorage.clear();
+
+      let countdown = 3;
+      const toastId = toast.error(
+        `Session expired. Redirecting to login in ${countdown} seconds...`,
+        {
+          position: "top-center",
+          autoClose: false,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: false,
+          draggable: false,
+        }
+      );
+
+      const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          toast.update(toastId, {
+            render: `Session expired. Redirecting to login in ${countdown} seconds...`,
+          });
+        } else {
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+
+      setTimeout(() => {
         clearInterval(countdownInterval);
-      }
-    }, 1000);
-    
-    // Redirect after 3 seconds
-    setTimeout(() => {
-      clearInterval(countdownInterval);
-      toast.dismiss(toastId);
-      window.location.href = "/login";
-    }, 3000);
-    
-    // Throw error to stop further processing
+        toast.dismiss(toastId);
+        sessionExpiredHandled = false; // reset for next login session
+        window.location.href = "/login";
+      }, 3000);
+    }
+
     throw new Error("Session expired. Please login again.");
   }
-  
+
   return response;
 };
 
 /**
- * Enhanced fetch wrapper with automatic token expiration handling
+ * Enhanced fetch wrapper with automatic token expiration handling.
  */
 export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem("token");
-  
-  // Add Authorization header if token exists
+
   const headers = {
     ...options.headers,
   };
-  
+
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
     });
-    
-    // Check for 401 and handle token expiration
+
     await handleApiResponse(response);
-    
+
     return response;
   } catch (error) {
-    // If it's a network error or our custom error, propagate it
     throw error;
   }
 };

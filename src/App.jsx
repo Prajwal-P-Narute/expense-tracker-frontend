@@ -31,7 +31,7 @@ function App() {
   return (
      <>
      <Routes>
-      <Route path="/" element={<Navigate to="/login" />} />
+      <Route path="/" element={token ? <ExpenseTracker setToken={setToken} /> : <Navigate to="/login" />} />
 
       <Route path="/login" element={<Login setToken={setToken} />} />
       <Route path="/register" element={<Register />} />
