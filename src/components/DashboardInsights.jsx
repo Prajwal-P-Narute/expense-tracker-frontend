@@ -24,27 +24,30 @@ const TAB_CONFIG = {
     title: "Debit Categories",
     subtitle: "See where your spending is concentrated and drill into it instantly.",
     totalLabel: "Debit total",
+    centerLabel: "Category share",
     tableLabel: "Category",
     emptyMessage: "No debit transactions match the current filters.",
-    interactionHint: "Click a slice, legend item, or breakdown row to load matching debit transactions.",
+    interactionHint: "Tap a category bar or breakdown row to open matching debit transactions.",
   },
   credit: {
     label: "Credit",
     title: "Credit Categories",
     subtitle: "Spot your strongest income sources and jump straight to those entries.",
     totalLabel: "Credit total",
+    centerLabel: "Category share",
     tableLabel: "Category",
     emptyMessage: "No credit transactions match the current filters.",
-    interactionHint: "Click a slice, legend item, or breakdown row to load matching credit transactions.",
+    interactionHint: "Tap a category bar or breakdown row to open matching credit transactions.",
   },
   labels: {
     label: "Labels",
     title: "Label Distribution",
     subtitle: "Compare how your filtered transactions are distributed across labels.",
     totalLabel: "Label total",
+    centerLabel: "Label share",
     tableLabel: "Label",
     emptyMessage: "No labeled data matches the current filters.",
-    interactionHint: "Label analytics stay in summary mode so you can compare patterns at a glance.",
+    interactionHint: "Tap a label segment, legend item, or breakdown row to open matching transactions.",
   },
 };
 
@@ -120,67 +123,13 @@ const handleSvgKeyDown = (event, onActivate) => {
   }
 };
 
-function DonutChart({ items, total }) {
-  const radius = 72;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-
-  return (
-    <div className="insights-donut-wrap">
-      <svg
-        className="insights-donut-chart"
-        viewBox="0 0 200 200"
-        role="img"
-        aria-label="Label distribution chart"
-      >
-        <circle
-          cx="100"
-          cy="100"
-          r={radius}
-          fill="none"
-          stroke="#e8ecff"
-          strokeWidth="34"
-        />
-        {items.map((item) => {
-          const segmentLength = (item.percentage / 100) * circumference;
-          const currentOffset = offset;
-          offset += segmentLength;
-
-          return (
-            <circle
-              key={item.name}
-              cx="100"
-              cy="100"
-              r={radius}
-              fill="none"
-              stroke={item.resolvedColor}
-              strokeWidth="34"
-              strokeDasharray={`${segmentLength} ${circumference}`}
-              strokeDashoffset={-currentOffset}
-              transform="rotate(-90 100 100)"
-              className="insights-donut-segment"
-            >
-              <title>{buildTooltip(item)}</title>
-            </circle>
-          );
-        })}
-      </svg>
-
-      <div className="insights-donut-center">
-        <strong>{formatCurrency(total)}</strong>
-        <span>Total</span>
-      </div>
-    </div>
-  );
-}
-
 function PieChart({
   items,
   total,
   selectedKey,
   tabKey,
   onSelectItem,
-  canSelect,
+  canSelectItem,
 }) {
   const segments = useMemo(() => {
     let currentAngle = 0;
@@ -210,31 +159,40 @@ function PieChart({
       >
         <circle cx="110" cy="110" r="96" fill="#eef2ff" />
         {items.length === 1 ? (
-          <circle
-            cx="110"
-            cy="110"
-            r="96"
-            fill={items[0].resolvedColor}
-            className={`insights-pie-slice ${canSelect ? "interactive" : ""} ${
-              selectedKey === `${tabKey}:${items[0].name}` ? "active" : ""
-            }`}
-            role={canSelect ? "button" : undefined}
-            tabIndex={canSelect ? 0 : undefined}
-            aria-pressed={
-              canSelect ? selectedKey === `${tabKey}:${items[0].name}` : undefined
-            }
-            onClick={canSelect ? () => onSelectItem(items[0]) : undefined}
-            onKeyDown={
-              canSelect
-                ? (event) => handleSvgKeyDown(event, () => onSelectItem(items[0]))
-                : undefined
-            }
-          >
-            <title>{buildTooltip(items[0])}</title>
-          </circle>
+          (() => {
+            const isInteractive = canSelectItem(items[0]);
+            const itemKey = items[0].id || items[0].name;
+
+            return (
+              <circle
+                cx="110"
+                cy="110"
+                r="96"
+                fill={items[0].resolvedColor}
+                className={`insights-pie-slice ${isInteractive ? "interactive" : ""} ${
+                  selectedKey === `${tabKey}:${itemKey}` ? "active" : ""
+                }`}
+                role={isInteractive ? "button" : undefined}
+                tabIndex={isInteractive ? 0 : undefined}
+                aria-pressed={
+                  isInteractive ? selectedKey === `${tabKey}:${itemKey}` : undefined
+                }
+                onClick={isInteractive ? () => onSelectItem(items[0]) : undefined}
+                onKeyDown={
+                  isInteractive
+                    ? (event) => handleSvgKeyDown(event, () => onSelectItem(items[0]))
+                    : undefined
+                }
+              >
+                <title>{buildTooltip(items[0])}</title>
+              </circle>
+            );
+          })()
         ) : (
           segments.map(({ item, startAngle, endAngle, midAngle }) => {
-            const isActive = selectedKey === `${tabKey}:${item.name}`;
+            const itemKey = item.id || item.name;
+            const isActive = selectedKey === `${tabKey}:${itemKey}`;
+            const isInteractive = canSelectItem(item);
             const offsetDistance = isActive ? 8 : 0;
             const offsetX = Math.cos(toRadians(midAngle)) * offsetDistance;
             const offsetY = Math.sin(toRadians(midAngle)) * offsetDistance;
@@ -246,14 +204,14 @@ function PieChart({
                 fill={item.resolvedColor}
                 transform={`translate(${offsetX} ${offsetY})`}
                 className={`insights-pie-slice ${
-                  canSelect ? "interactive" : ""
+                  isInteractive ? "interactive" : ""
                 } ${isActive ? "active" : ""}`}
-                role={canSelect ? "button" : undefined}
-                tabIndex={canSelect ? 0 : undefined}
-                aria-pressed={canSelect ? isActive : undefined}
-                onClick={canSelect ? () => onSelectItem(item) : undefined}
+                role={isInteractive ? "button" : undefined}
+                tabIndex={isInteractive ? 0 : undefined}
+                aria-pressed={isInteractive ? isActive : undefined}
+                onClick={isInteractive ? () => onSelectItem(item) : undefined}
                 onKeyDown={
-                  canSelect
+                  isInteractive
                     ? (event) => handleSvgKeyDown(event, () => onSelectItem(item))
                     : undefined
                 }
@@ -267,8 +225,84 @@ function PieChart({
 
       <div className="insights-pie-center">
         <strong>{formatCurrency(total)}</strong>
-        <span>{items.length} slices</span>
+        <span>{TAB_CONFIG[tabKey].centerLabel}</span>
       </div>
+    </div>
+  );
+}
+
+function HorizontalBarChart({
+  items,
+  selectedKey,
+  tabKey,
+  onSelectItem,
+  canSelectItem,
+}) {
+  return (
+    <div
+      className="insights-bar-chart"
+      role="list"
+      aria-label={`${TAB_CONFIG[tabKey].label} category horizontal bar chart`}
+    >
+      {items.map((item) => {
+        const itemKey = item.id || item.name;
+        const isActive = selectedKey === `${tabKey}:${itemKey}`;
+        const isInteractive = canSelectItem(item);
+        const minWidth = item.percentage > 0 ? 8 : 0;
+        const barWidth = Math.max(Math.min(item.percentage, 100), minWidth);
+        const content = (
+          <>
+            <div className="insights-bar-head">
+              <div className="insights-bar-label">
+                <span
+                  className="insights-name-dot"
+                  style={{ backgroundColor: item.resolvedColor }}
+                />
+                <strong>{item.name}</strong>
+              </div>
+              <div className="insights-bar-metrics">
+                <span>{formatCurrency(item.amount)}</span>
+                <strong>{formatPercentage(item.percentage)}</strong>
+              </div>
+            </div>
+
+            <div className="insights-bar-track">
+              <div
+                className="insights-bar-fill"
+                style={{
+                  width: `${barWidth}%`,
+                  background: `linear-gradient(90deg, ${item.resolvedColor}, ${item.resolvedColor}cc)`,
+                }}
+              />
+            </div>
+          </>
+        );
+
+        if (isInteractive) {
+          return (
+            <button
+              key={item.name}
+              type="button"
+              className={`insights-bar-item interactive ${isActive ? "active" : ""}`}
+              title={buildTooltip(item)}
+              aria-pressed={isActive}
+              onClick={() => onSelectItem(item)}
+            >
+              {content}
+            </button>
+          );
+        }
+
+        return (
+          <div
+            key={item.name}
+            className="insights-bar-item"
+            title={buildTooltip(item)}
+          >
+            {content}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -300,7 +334,10 @@ export default function DashboardInsights({
   const currentSection = sections[activeTab] || EMPTY_SECTION;
   const currentTab = TAB_CONFIG[activeTab];
   const hasData = currentSection.items.length > 0;
-  const canSelectInsights = activeTab !== "labels" && typeof onSelectItem === "function";
+  const canSelectInsights = typeof onSelectItem === "function";
+  const canSelectItem = (item) =>
+    canSelectInsights && (activeTab !== "labels" || Boolean(item?.id));
+  const usesBarChart = activeTab === "debit" || activeTab === "credit";
 
   return (
     <section className="insights-panel">
@@ -346,62 +383,70 @@ export default function DashboardInsights({
 
           {hasData ? (
             <>
-              <div className="insights-visual-layout">
-                {activeTab === "labels" ? (
-                  <DonutChart items={currentSection.items} total={currentSection.total} />
-                ) : (
+              {usesBarChart ? (
+                <HorizontalBarChart
+                  items={currentSection.items}
+                  tabKey={activeTab}
+                  selectedKey={activeItemKey}
+                  canSelectItem={canSelectItem}
+                  onSelectItem={(item) => onSelectItem(activeTab, item)}
+                />
+              ) : (
+                <div className="insights-visual-layout">
                   <PieChart
                     items={currentSection.items}
                     total={currentSection.total}
                     tabKey={activeTab}
                     selectedKey={activeItemKey}
-                    canSelect={canSelectInsights}
+                    canSelectItem={canSelectItem}
                     onSelectItem={(item) => onSelectItem(activeTab, item)}
                   />
-                )}
 
-                <div className="insights-legend">
-                  {currentSection.items.map((item) => {
-                    const isActive = activeItemKey === `${activeTab}:${item.name}`;
-                    const content = (
-                      <>
-                        <span
-                          className="insights-legend-swatch"
-                          style={{ backgroundColor: item.resolvedColor }}
-                        />
-                        <div>
-                          <strong>{item.name}</strong>
-                          <span>
-                            {formatPercentage(item.percentage)} • {formatCurrency(item.amount)}
-                          </span>
+                  <div className="insights-legend">
+                    {currentSection.items.map((item) => {
+                      const itemKey = item.id || item.name;
+                      const isActive = activeItemKey === `${activeTab}:${itemKey}`;
+                      const isInteractive = canSelectItem(item);
+                      const content = (
+                        <>
+                          <span
+                            className="insights-legend-swatch"
+                            style={{ backgroundColor: item.resolvedColor }}
+                          />
+                          <div>
+                            <strong>{item.name}</strong>
+                            <span>
+                              {formatPercentage(item.percentage)} • {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                        </>
+                      );
+
+                      return isInteractive ? (
+                        <button
+                          key={item.name}
+                          type="button"
+                          className={`insights-legend-item interactive ${
+                            isActive ? "active" : ""
+                          }`}
+                          title={buildTooltip(item)}
+                          onClick={() => onSelectItem(activeTab, item)}
+                        >
+                          {content}
+                        </button>
+                      ) : (
+                        <div
+                          key={item.name}
+                          className="insights-legend-item"
+                          title={buildTooltip(item)}
+                        >
+                          {content}
                         </div>
-                      </>
-                    );
-
-                    return canSelectInsights ? (
-                      <button
-                        key={item.name}
-                        type="button"
-                        className={`insights-legend-item interactive ${
-                          isActive ? "active" : ""
-                        }`}
-                        title={buildTooltip(item)}
-                        onClick={() => onSelectItem(activeTab, item)}
-                      >
-                        {content}
-                      </button>
-                    ) : (
-                      <div
-                        key={item.name}
-                        className="insights-legend-item"
-                        title={buildTooltip(item)}
-                      >
-                        {content}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="insights-click-hint">
                 {currentTab.interactionHint}
@@ -433,8 +478,10 @@ export default function DashboardInsights({
                 </thead>
                 <tbody>
                   {currentSection.items.map((item) => {
-                    const isActive = activeItemKey === `${activeTab}:${item.name}`;
-                    const rowClassName = canSelectInsights
+                    const itemKey = item.id || item.name;
+                    const isActive = activeItemKey === `${activeTab}:${itemKey}`;
+                    const isInteractive = canSelectItem(item);
+                    const rowClassName = isInteractive
                       ? `insights-clickable-row ${isActive ? "active" : ""}`
                       : "";
 
@@ -444,7 +491,7 @@ export default function DashboardInsights({
                         className={rowClassName}
                         title={buildTooltip(item)}
                         onClick={
-                          canSelectInsights
+                          isInteractive
                             ? () => onSelectItem(activeTab, item)
                             : undefined
                         }

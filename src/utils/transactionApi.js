@@ -3,6 +3,23 @@
 import { BASE_URL } from "./api";
 import { fetchWithAuth } from "./apiInterceptor";
 
+const EMPTY_ANALYTICS = {
+  debit: { total: 0, maxAmount: 0, items: [] },
+  credit: { total: 0, maxAmount: 0, items: [] },
+  labels: { total: 0, maxAmount: 0, items: [] },
+};
+
+const buildEmptyWorkspaceResponse = () => ({
+  openingBalance: 0,
+  transactions: [],
+  totalElements: 0,
+  totalPages: 0,
+  totalIncome: 0,
+  totalExpense: 0,
+  finalBalance: 0,
+  analytics: EMPTY_ANALYTICS,
+});
+
 const authHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -147,6 +164,48 @@ export async function fetchTransactionAnalytics(filters = {}) {
       credit: { total: 0, maxAmount: 0, items: [] },
       labels: { total: 0, maxAmount: 0, items: [] },
     };
+  }
+}
+
+export async function fetchTransactionWorkspace(
+  page = 0,
+  pageSize = 15,
+  filters = {},
+  includeAnalytics = false,
+) {
+  try {
+    const safePage = Number.isFinite(Number(page))
+      ? Math.max(0, Math.floor(Number(page)))
+      : 0;
+    const safePageSize = Number.isFinite(Number(pageSize))
+      ? Math.max(1, Math.floor(Number(pageSize)))
+      : 15;
+
+    const params = buildTransactionFilterParams(filters, true);
+    params.append("page", safePage);
+    params.append("size", safePageSize);
+    params.append("includeAnalytics", includeAnalytics ? "true" : "false");
+
+    const res = await fetchWithAuth(
+      `${BASE_URL}/api/transactions/workspace?${params.toString()}`,
+      { headers: authHeaders() },
+    );
+
+    if (!res.ok) {
+      console.error("Failed to load transaction workspace, status:", res.status);
+      return buildEmptyWorkspaceResponse();
+    }
+
+    const data = await res.json();
+    return {
+      ...buildEmptyWorkspaceResponse(),
+      ...data,
+      transactions: Array.isArray(data?.transactions) ? data.transactions : [],
+      analytics: data?.analytics || EMPTY_ANALYTICS,
+    };
+  } catch (error) {
+    console.error("Error fetching transaction workspace:", error);
+    return buildEmptyWorkspaceResponse();
   }
 }
 

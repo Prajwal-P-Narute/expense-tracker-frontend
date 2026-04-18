@@ -1205,3 +1205,73 @@
   text-align: center;
   width: 12%;
 }
+
+/* Modern ledger polish */
+.fintrack-container {
+  max-width: 1480px;
+  padding: 28px 20px 40px;
+}
+
+.fintrack-container header {
+  border-radius: 28px;
+  padding: 24px 28px;
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 28%),
+    linear-gradient(135deg, #0f172a, #1e293b);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+}
+
+.fintrack-container .logo,
+.fintrack-container header p,
+.fintrack-container header span {
+  color: #f8fafc;
+}
+
+.fintrack-container .card,
+.fintrack-container .sidebar,
+.fintrack-container .main-content {
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
+}
+
+.fintrack-container .contact-item {
+  border-radius: 18px;
+  border-left-width: 0;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.fintrack-container .contact-item.active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.fintrack-container table {
+  margin-top: 18px;
+}
+
+.fintrack-container th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fintrack-container .btn-primary,
+.fintrack-container .btn-secondary {
+  border-radius: 16px;
+}
+
+@media (max-width: 768px) {
+  .fintrack-container {
+    padding: 18px 14px 32px;
+  }
+
+  .fintrack-container header,
+  .fintrack-container .card,
+  .fintrack-container .sidebar,
+  .fintrack-container .main-content {
+    border-radius: 22px;
+  }
+}

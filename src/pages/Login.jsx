@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
-import logo from "../assets/expenseimg.png"; 
+import logo from "../assets/expenseimg.png";
 import { toast } from "react-toastify";
+import "./Auth.css";
 
 const Login = ({ setToken }) => {
   const [loading, setLoading] = useState(false);  
@@ -87,70 +88,77 @@ const Login = ({ setToken }) => {
   };
 
   return (
-    <div
-      className="d-flex align-items-center justify-content-center vh-100"
-      style={{ background: "linear-gradient(90deg, #6a5af9, #8268f9)" }}
-    >
-      <div className="rounded-4 p-5 bg-white text-center" style={{ width: "100%", maxWidth: "400px" }}>
-        <img
-          src={logo}
-          alt="Logo"
-          style={{ height: "100px", marginBottom: "20px" }}
-        />
-        <h4 className="mb-4">Log in</h4>
+    <div className="auth-shell">
+      <div className="auth-panel">
+        <div className="auth-brand">
+          <div className="auth-brand-row">
+            <img src={logo} alt="Expense Tracker logo" className="auth-logo" />
+            <div>
+              <span className="auth-kicker">Expense Tracker</span>
+              <h1 className="auth-title">Welcome back</h1>
+            </div>
+          </div>
+          <p className="auth-subtitle">
+            Sign in to see your dashboard, open your transactions workspace, and keep your money
+            flow in one place.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} noValidate>
-          <input
-            type="email"
-            id="email"
-            className="form-control mb-3"
-            placeholder="Email address"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-          <input
-            type="password"
-            id="password"
-            className="form-control mb-3"
-            placeholder="Password"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          <label htmlFor="email" className="auth-field">
+            Email address
+            <input
+              type="email"
+              id="email"
+              className="auth-input"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label htmlFor="password" className="auth-field">
+            Password
+            <input
+              type="password"
+              id="password"
+              className="auth-input"
+              placeholder="Enter your password"
+              value={form.password}
+              onChange={handleChange}
+              required
+            />
+          </label>
 
           {error && (
-            <div className="text-danger mb-3" role="alert">
+            <div className="auth-error" role="alert">
               {error}
             </div>
           )}
 
-          <button className="btn btn-primary w-100 mb-3" type="submit" disabled={loading}>
+          <button className="auth-action" type="submit" disabled={loading}>
             {loading ? (
-              <>
-                <span
-                  className="spinner-border spinner-border-sm me-2"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-                Please wait...
-              </>
+              <span className="btn-with-spinner">
+                <span className="btn-spinner" aria-hidden="true" />
+                Signing in...
+              </span>
             ) : (
               "Login"
             )}
           </button>
 
-          <p className="small mb-3">  
-            <a href="/reset-password" className="text-muted">
+          <div className="auth-links">
+            <a href="/reset-password" className="auth-link">
               Forgot password?
             </a>
-          </p>
-          <p>
-            Don't have an account?{" "}
-            <a href="/register" className="link-info">
-              Register here
-            </a>
-          </p>
+            <span>
+              New here?{" "}
+              <a href="/register" className="auth-link">
+                Create account
+              </a>
+            </span>
+          </div>
         </form>
       </div>
     </div>

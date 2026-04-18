@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 import { toast } from "react-toastify";
+import logo from "../assets/expenseimg.png";
+import "./Auth.css";
 
 const Register = () => {
   const [form, setForm] = useState({
@@ -42,7 +44,7 @@ const Register = () => {
       if (res.ok) {
         setMessage("Registration successful! Redirecting to login...");
         toast.success("Registration successful! Redirecting to login...");
-        setForm({ name: "", email: "", password: "" });
+        setForm({ name: "", email: "", password: "", openingBalance: "" });
         setTimeout(() => navigate("/login"), 2000);
       } else {
         const text = await res.text();
@@ -58,79 +60,94 @@ const Register = () => {
   };
 
   return (
-    <div
-      className="d-flex align-items-center justify-content-center vh-100"
-      style={{ background: "linear-gradient(90deg, #6a5af9, #8268f9)" }}
-    >
-      <div
-        className="rounded-4 p-5 bg-white"
-        style={{ width: "100%", maxWidth: "400px" }}
-      >
-        <h4 className="text-center mb-4">Create an Account</h4>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            id="name"
-            className="form-control mb-3"
-            placeholder="Your Name"
-            value={form.name}
-            onChange={handleChange}
-            required
-          />
+    <div className="auth-shell">
+      <div className="auth-panel">
+        <div className="auth-brand">
+          <div className="auth-brand-row">
+            <img src={logo} alt="Expense Tracker logo" className="auth-logo" />
+            <div>
+              <span className="auth-kicker">Get Started</span>
+              <h1 className="auth-title">Create your account</h1>
+            </div>
+          </div>
+          <p className="auth-subtitle">
+            Start with your opening balance, track daily movement, and keep the dashboard ready
+            from day one.
+          </p>
+        </div>
 
-          <input
-            type="email"
-            id="email"
-            className="form-control mb-3"
-            placeholder="Your Email"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label htmlFor="name" className="auth-field">
+            Full name
+            <input
+              type="text"
+              id="name"
+              className="auth-input"
+              placeholder="Your name"
+              value={form.name}
+              onChange={handleChange}
+              required
+            />
+          </label>
 
-          <input
-            type="password"
-            id="password"
-            className="form-control mb-3"
-            placeholder="Password"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
+          <label htmlFor="email" className="auth-field">
+            Email address
+            <input
+              type="email"
+              id="email"
+              className="auth-input"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+          </label>
 
-          <input
-            type="number"
-            id="openingBalance" 
-            className="form-control mb-3"
-            placeholder="Opening Balance (optional)"
-            value={form.openingBalance || ""}
-            onChange={handleChange}
-          />
+          <label htmlFor="password" className="auth-field">
+            Password
+            <input
+              type="password"
+              id="password"
+              className="auth-input"
+              placeholder="Create a password"
+              value={form.password}
+              onChange={handleChange}
+              required
+            />
+          </label>
 
-          {message && <p className="text-success text-center">{message}</p>}
-          {error && <p className="text-danger text-center">{error}</p>}
+          <label htmlFor="openingBalance" className="auth-field">
+            Opening balance
+            <input
+              type="number"
+              id="openingBalance"
+              className="auth-input"
+              placeholder="Optional"
+              value={form.openingBalance || ""}
+              onChange={handleChange}
+            />
+          </label>
 
-          <button type="submit" className="btn btn-primary w-100 mb-3" disabled={loading}>
+          {message && <div className="auth-success">{message}</div>}
+          {error && <div className="auth-error">{error}</div>}
+
+          <button type="submit" className="auth-action" disabled={loading}>
             {loading ? (
-    <>
-      <span
-        className="spinner-border spinner-border-sm me-2"
-        role="status"
-        aria-hidden="true"
-      ></span>
-      Please wait...
-    </>
-  ) : (
-    "Register"
-  )}
+              <span className="btn-with-spinner">
+                <span className="btn-spinner" aria-hidden="true" />
+                Creating account...
+              </span>
+            ) : (
+              "Register"
+            )}
           </button>
 
-          <p className="text-center text-muted">
-            Have an account?{" "}
-            <a href="/login" className="fw-bold">
+          <div className="auth-meta">
+            <span>Already registered?</span>
+            <a href="/login" className="auth-link">
               Login here
             </a>
-          </p>
+          </div>
         </form>
       </div>
     </div>
