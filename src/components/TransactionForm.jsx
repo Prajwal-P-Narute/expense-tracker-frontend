@@ -23,6 +23,7 @@ const TransactionForm = () => {
     location.state?.isContactTransaction || false;
   const isEditMode = !!editingTransaction;
   const returnPage = location.state?.returnPage || 1;
+  const returnPath = location.state?.returnPath || "/expense-tracker";
 
   const [allCategories, setAllCategories] = useState([]);
   const [allLabels, setAllLabels] = useState([]);
@@ -185,7 +186,7 @@ const TransactionForm = () => {
   }
 
   navigate(
-    showContactSelect ? "/manage-finances" : "/expense-tracker",
+    showContactSelect ? "/manage-finances" : returnPath,
     { state: { refresh: true, returnPage: targetPage } },
   );
 } else {
@@ -193,7 +194,7 @@ const TransactionForm = () => {
         toast.success("Transaction added successfully!");
 
         navigate(
-          showContactSelect ? "/manage-finances" : "/expense-tracker",
+          showContactSelect ? "/manage-finances" : returnPath,
           { state: { refresh: true, returnPage: returnPage } },
         );
       }
@@ -205,7 +206,7 @@ const TransactionForm = () => {
   };
 
   return (
-    <div className="container">
+    <div className="container transaction-form-shell">
       <div className="header">
         <h1>{isEditMode ? "Edit Transaction" : "Add New Transaction"}</h1>
         <button className="back-btn" disabled={submitting} onClick={() => navigate(-1)}>

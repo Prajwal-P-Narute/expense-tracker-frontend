@@ -512,3 +512,84 @@ h2 {
   color: #f39c12;
   font-size: 24px;
 }
+
+/* Modern label manager */
+.label-manager {
+  max-width: 1120px;
+  padding: 28px 20px 40px;
+}
+
+.label-manager > header {
+  padding: 28px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 30%),
+    linear-gradient(135deg, #111827, #1e293b);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+}
+
+.label-manager > header h1,
+.label-manager > header .subtitle {
+  color: #f8fafc;
+}
+
+.label-manager .labels-container {
+  border-radius: 26px;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
+}
+
+.label-manager .section-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 16px;
+}
+
+.label-manager .add-label-form {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.label-manager .add-label-input {
+  border-radius: 16px;
+  border: 1px solid #dbe4f0;
+}
+
+.label-manager .add-btn {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+}
+
+.label-manager .label-item {
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.label-manager .label-usage,
+.label-manager .default-badge {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+}
+
+.label-manager .edit-modal-content,
+.label-manager .delete-modal-content,
+.label-manager .cancel-delete-modal-content {
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.18);
+}
+
+@media (max-width: 768px) {
+  .label-manager {
+    padding: 18px 14px 32px;
+  }
+
+  .label-manager > header,
+  .label-manager .labels-container {
+    border-radius: 22px;
+    padding: 20px;
+  }
+}

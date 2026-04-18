@@ -11,13 +11,16 @@ import ManageCategory from './components/ManageCategory';
 import ManageLabel from './components/ManageLabel';
 import FinTrack from './components/FinTrack';
 import ContactManager from './components/ContactManager';
+import { getInitialTheme, THEME_STORAGE_KEY } from './utils/theme';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [theme, setTheme] = useState(getInitialTheme);
 
   useEffect(() => {
     const handleStorage = () => {
       setToken(localStorage.getItem("token"));
+      setTheme(getInitialTheme());
     };
 
     window.addEventListener("storage", handleStorage);
@@ -27,11 +30,28 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
 
   return (
      <>
      <Routes>
-      <Route path="/" element={token ? <ExpenseTracker setToken={setToken} /> : <Navigate to="/login" />} />
+      <Route
+        path="/"
+        element={
+          token ? (
+            <ExpenseTracker
+              setToken={setToken}
+              setTheme={setTheme}
+              theme={theme}
+              view="dashboard"
+            />
+          ) : <Navigate to="/login" />
+        }
+      />
 
       <Route path="/login" element={<Login setToken={setToken} />} />
       <Route path="/register" element={<Register />} />
@@ -39,7 +59,28 @@ function App() {
       <Route
         path="/expense-tracker"
         element={
-          token ? <ExpenseTracker setToken={setToken} /> : <Navigate to="/login" />
+          token ? (
+            <ExpenseTracker
+              setToken={setToken}
+              setTheme={setTheme}
+              theme={theme}
+              view="dashboard"
+            />
+          ) : <Navigate to="/login" />
+        }
+      />
+
+      <Route
+        path="/transactions"
+        element={
+          token ? (
+            <ExpenseTracker
+              setToken={setToken}
+              setTheme={setTheme}
+              theme={theme}
+              view="transactions"
+            />
+          ) : <Navigate to="/login" />
         }
       />
     

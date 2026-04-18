@@ -306,7 +306,7 @@ const ManageCategory = () => {
     );
 
   return (
-    <div className="container">
+    <div className="container category-manager">
       <header>
         <h1>Manage Categories</h1>
         <p className="subtitle">

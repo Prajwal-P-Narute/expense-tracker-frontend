@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BASE_URL } from "../utils/api";
 import { toast } from "react-toastify";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -17,12 +16,10 @@ import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import {
   deleteTransaction,
-  fetchTransactionAnalytics,
-  fetchTransactionsPageable,
-  fetchFilteredSummary,
+  fetchTransactionWorkspace,
 } from "../utils/transactionApi";
 import TransactionFilter from "./TransactionFilter";
-import { fetchWithAuth } from "../utils/apiInterceptor";
+import { THEME_OPTIONS } from "../utils/theme";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -45,6 +42,44 @@ const EMPTY_ANALYTICS = {
   labels: { total: 0, maxAmount: 0, items: [] },
 };
 
+const normalizeFiltersForComparison = (filters) => {
+  const safeFilters = filters || {};
+
+  return {
+    selectedType: safeFilters.selectedType || "All",
+    selectedCategory: safeFilters.selectedCategory || "All",
+    startDate: safeFilters.startDate || "",
+    endDate: safeFilters.endDate || "",
+    selectedLabel: safeFilters.selectedLabel || "All",
+    columnSearch: {
+      ...EMPTY_SEARCH,
+      ...(safeFilters.columnSearch || {}),
+    },
+    sortConfig: {
+      key: safeFilters.sortConfig?.key ?? null,
+      direction: safeFilters.sortConfig?.direction || "desc",
+    },
+  };
+};
+
+const areFiltersEqual = (left = {}, right = {}) => {
+  const a = normalizeFiltersForComparison(left);
+  const b = normalizeFiltersForComparison(right);
+
+  return (
+    a.selectedType === b.selectedType &&
+    a.selectedCategory === b.selectedCategory &&
+    a.startDate === b.startDate &&
+    a.endDate === b.endDate &&
+    a.selectedLabel === b.selectedLabel &&
+    a.sortConfig.key === b.sortConfig.key &&
+    a.sortConfig.direction === b.sortConfig.direction &&
+    Object.keys(EMPTY_SEARCH).every(
+      (key) => a.columnSearch[key] === b.columnSearch[key],
+    )
+  );
+};
+
 const LoadingOverlay = ({ message = "Loading transactions..." }) => (
   <div className="loading-overlay">
     <div className="spinner" />
@@ -55,10 +90,17 @@ const LoadingOverlay = ({ message = "Loading transactions..." }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
-const ExpenseTracker = ({ setToken }) => {
+const ExpenseTracker = ({
+  setToken,
+  setTheme,
+  theme = THEME_OPTIONS[0].id,
+  view = "dashboard",
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem("token");
+  const isDashboardView = view === "dashboard";
+  const isTransactionsView = view === "transactions";
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
@@ -84,6 +126,7 @@ const ExpenseTracker = ({ setToken }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [userName, setUserName] = useState("");
+  const [currentDateLabel, setCurrentDateLabel] = useState("");
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
   const [pendingNavigation, setPendingNavigation] = useState("");
 
@@ -113,12 +156,66 @@ const ExpenseTracker = ({ setToken }) => {
   const searchInputRef = useRef(null);
   const searchPopupRef = useRef(null);
   const transactionsSectionRef = useRef(null);
+  const currentPageStorageKey = "et_transactionsPage";
 
   // ─────────────────────────────────────────────────────────────────────────
   // FETCH TRIGGER PATTERN
   // ─────────────────────────────────────────────────────────────────────────
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const filtersRef = useRef({});
+
+  const currentFilters = useMemo(
+    () =>
+      normalizeFiltersForComparison({
+        selectedType,
+        selectedCategory,
+        startDate,
+        endDate,
+        selectedLabel,
+        columnSearch,
+        sortConfig,
+      }),
+    [
+      selectedType,
+      selectedCategory,
+      startDate,
+      endDate,
+      selectedLabel,
+      columnSearch,
+      sortConfig,
+    ],
+  );
+
+  const buildBootstrapData = useCallback(
+    () => ({
+      currentPage,
+      filters: currentFilters,
+      openingBalance,
+      transactions,
+      totalPages,
+      totalIncome,
+      totalExpense,
+      finalBalance,
+      analytics,
+      categoryOptions,
+      labelMap,
+      labelOptions,
+    }),
+    [
+      analytics,
+      categoryOptions,
+      currentFilters,
+      currentPage,
+      finalBalance,
+      labelMap,
+      labelOptions,
+      openingBalance,
+      totalExpense,
+      totalIncome,
+      totalPages,
+      transactions,
+    ],
+  );
 
   const snapshotFilters = useCallback(
     (overrides = {}) => {
@@ -171,28 +268,20 @@ const ExpenseTracker = ({ setToken }) => {
         sortDir: f.sortConfig?.direction || "desc",
       };
 
-      const [openingBal, pageData, summary, analyticsData] = await Promise.all([
-        fetchWithAuth(`${BASE_URL}/api/transactions/opening-balance`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((r) => r.json()),
-        fetchTransactionsPageable(
-          Math.max(0, (Number(f.currentPage) || 1) - 1),
-          PAGE_SIZE,
-          filters,
-        ),
-        fetchFilteredSummary(filters),
-        fetchTransactionAnalytics(filters),
-      ]);
+      const workspaceData = await fetchTransactionWorkspace(
+        Math.max(0, (Number(f.currentPage) || 1) - 1),
+        PAGE_SIZE,
+        filters,
+        isDashboardView,
+      );
 
-      setOpeningBalance(openingBal);
-      setTransactions(pageData.content || []);
-      setTotalPages(pageData.totalPages || 0);
-
-      // Update summary cards with filtered totals
-      setTotalIncome(summary.totalIncome ?? 0);
-      setTotalExpense(summary.totalExpense ?? 0);
-      setFinalBalance(summary.finalBalance ?? 0);
-      setAnalytics(analyticsData || EMPTY_ANALYTICS);
+      setOpeningBalance(workspaceData.openingBalance ?? 0);
+      setTransactions(workspaceData.transactions || []);
+      setTotalPages(workspaceData.totalPages || 0);
+      setTotalIncome(workspaceData.totalIncome ?? 0);
+      setTotalExpense(workspaceData.totalExpense ?? 0);
+      setFinalBalance(workspaceData.finalBalance ?? 0);
+      setAnalytics(workspaceData.analytics || EMPTY_ANALYTICS);
     } catch (err) {
       if (!err.message?.includes("Session expired"))
         toast.error("Failed to load transactions.");
@@ -202,7 +291,7 @@ const ExpenseTracker = ({ setToken }) => {
       setIsLoadingPage(false);
       setIsInitialLoad(false);
     }
-  }, [token]);
+  }, [isDashboardView]);
 
   useEffect(() => {
     if (token) doFetch();
@@ -218,26 +307,83 @@ useEffect(() => {
     return;
   }
 
-  if (location.state?.refresh && location.state?.returnPage) {
-    const pg = location.state.returnPage;
-    navigate(location.pathname, { replace: true, state: {} });
-    setCurrentPage(pg);
-    snapshotFilters({ currentPage: pg });
+  const incomingState = location.state || {};
+  const bootstrapData = incomingState.bootstrapData || null;
+  const savedPage = parseInt(sessionStorage.getItem(currentPageStorageKey), 10);
+  const incomingPage = Number(incomingState.returnPage);
+  const nextPage = Number.isFinite(incomingPage) && incomingPage > 0
+    ? incomingPage
+    : savedPage && savedPage > 0
+      ? savedPage
+      : 1;
+  const incomingFilters =
+    incomingState.prefillFilters || bootstrapData?.filters || null;
+  const normalizedIncomingFilters =
+    normalizeFiltersForComparison(incomingFilters);
+  const nextFilters = {
+    ...normalizedIncomingFilters,
+    currentPage: nextPage,
+  };
+
+  setSelectedType(nextFilters.selectedType);
+  setSelectedCategory(nextFilters.selectedCategory);
+  setStartDate(nextFilters.startDate);
+  setEndDate(nextFilters.endDate);
+  setSelectedLabel(nextFilters.selectedLabel);
+  setColumnSearch(nextFilters.columnSearch);
+  setSortConfig(nextFilters.sortConfig);
+  setCurrentPage(nextPage);
+  setFilterOpen(Boolean(incomingFilters) || isTransactionsView);
+  filtersRef.current = nextFilters;
+
+  const canUseBootstrap =
+    !incomingState.refresh &&
+    bootstrapData &&
+    Number(bootstrapData.currentPage || 1) === nextPage &&
+    areFiltersEqual(bootstrapData.filters, normalizedIncomingFilters);
+
+  if (canUseBootstrap) {
+    setOpeningBalance(Number(bootstrapData.openingBalance) || 0);
+    setTransactions(
+      Array.isArray(bootstrapData.transactions) ? bootstrapData.transactions : [],
+    );
+    setTotalPages(Number(bootstrapData.totalPages) || 0);
+    setTotalIncome(Number(bootstrapData.totalIncome) || 0);
+    setTotalExpense(Number(bootstrapData.totalExpense) || 0);
+    setFinalBalance(Number(bootstrapData.finalBalance) || 0);
+    setAnalytics(bootstrapData.analytics || EMPTY_ANALYTICS);
+
+    if (Array.isArray(bootstrapData.categoryOptions) && bootstrapData.categoryOptions.length) {
+      setCategoryOptions(bootstrapData.categoryOptions);
+    }
+    if (bootstrapData.labelMap && typeof bootstrapData.labelMap === "object") {
+      setLabelMap(bootstrapData.labelMap);
+    }
+    if (Array.isArray(bootstrapData.labelOptions) && bootstrapData.labelOptions.length) {
+      setLabelOptions(bootstrapData.labelOptions);
+    }
+
+    setIsLoadingPage(false);
+    setIsInitialLoad(false);
   } else {
-    // ── Restore page from sessionStorage on refresh, default to 1 ──
-    const savedPage = parseInt(sessionStorage.getItem("et_currentPage"), 10);
-    const pg = savedPage && savedPage > 0 ? savedPage : 1;
-    setCurrentPage(pg);
-    snapshotFilters({ currentPage: pg });
+    setIsLoadingPage(true);
+    setFetchTrigger((t) => t + 1);
   }
-  setIsLoadingPage(true);
-  setFetchTrigger((t) => t + 1);
+
+  if (
+    incomingState.refresh ||
+    incomingState.returnPage ||
+    incomingFilters ||
+    bootstrapData
+  ) {
+    navigate(location.pathname, { replace: true, state: {} });
+  }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [token]);
+}, [token, location.pathname, isTransactionsView]);
 
 // Persist current page so browser refresh lands on the same page
 useEffect(() => {
-  sessionStorage.setItem("et_currentPage", String(currentPage));
+  sessionStorage.setItem(currentPageStorageKey, String(currentPage));
 }, [currentPage]);
   // ─────────────────────────────────────────────────────────────────────────
   // Supporting data
@@ -265,7 +411,7 @@ useEffect(() => {
       }
     };
     load();
-  }, [location.key, token]);
+  }, [token]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Misc UI effects
@@ -291,9 +437,9 @@ useEffect(() => {
       "November",
       "December",
     ];
-    const el = document.getElementById("currentDate");
-    if (el)
-      el.textContent = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    setCurrentDateLabel(
+      `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`,
+    );
   }, []);
 
   useEffect(() => {
@@ -322,6 +468,10 @@ useEffect(() => {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [activeSearchColumn]);
+
+  useEffect(() => {
+    setPendingNavigation("");
+  }, [location.pathname]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Helpers — check if any filter/search is currently active
@@ -487,7 +637,12 @@ useEffect(() => {
         return;
       }
 
-      setPendingNavigation(message);
+      const usesInlineShellLoading =
+        path === "/" || path === "/expense-tracker" || path === "/transactions";
+
+      if (!usesInlineShellLoading) {
+        setPendingNavigation(message);
+      }
       setDropdownOpen(false);
       window.requestAnimationFrame(() => {
         navigate(path, options);
@@ -496,7 +651,16 @@ useEffect(() => {
     [location.pathname, navigate, pendingNavigation],
   );
 
+  const buildInsightKey = useCallback((sectionKey, item) => {
+    if (!sectionKey || !item) return null;
+    return `${sectionKey}:${item.id || item.name}`;
+  }, []);
+
   const activeInsightKey = useMemo(() => {
+    if (selectedLabel !== "All") {
+      return `labels:${selectedLabel}`;
+    }
+
     if (
       selectedType !== "All" &&
       selectedCategory !== "All" &&
@@ -506,30 +670,73 @@ useEffect(() => {
     }
 
     return null;
-  }, [selectedType, selectedCategory]);
+  }, [selectedLabel, selectedType, selectedCategory]);
 
   const handleInsightSelection = useCallback(
     (sectionKey, item) => {
-      if (!item || sectionKey === "labels") return;
+      if (!item) return;
 
-      setSelectedType(sectionKey);
-      setSelectedCategory(item.name);
-      setFilterOpen(true);
-      requestDataRefresh(
-        {
-          selectedType: sectionKey,
-          selectedCategory: item.name,
-        },
-        1,
-      );
-      window.requestAnimationFrame(() => {
-        transactionsSectionRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
+      const nextFilters =
+        sectionKey === "labels"
+          ? {
+              selectedType,
+              selectedCategory,
+              startDate,
+              endDate,
+              selectedLabel: item.id || "All",
+              columnSearch,
+              sortConfig,
+            }
+          : {
+              selectedType: sectionKey,
+              selectedCategory: item.name,
+              startDate,
+              endDate,
+              selectedLabel,
+              columnSearch,
+              sortConfig,
+            };
+
+      if (isTransactionsView) {
+        setFilterOpen(true);
+        setSelectedType(nextFilters.selectedType);
+        setSelectedCategory(nextFilters.selectedCategory);
+        setSelectedLabel(nextFilters.selectedLabel);
+        requestDataRefresh(nextFilters, 1);
+        window.requestAnimationFrame(() => {
+          transactionsSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
         });
-      });
+        return;
+      }
+
+      navigateWithLoader(
+        "/transactions",
+        {
+          state: {
+            prefillFilters: nextFilters,
+            activeInsightKey: buildInsightKey(sectionKey, item),
+            returnPage: 1,
+          },
+        },
+        "Opening matching transactions...",
+      );
     },
-    [requestDataRefresh],
+    [
+      buildInsightKey,
+      columnSearch,
+      endDate,
+      isTransactionsView,
+      navigateWithLoader,
+      requestDataRefresh,
+      selectedCategory,
+      selectedLabel,
+      selectedType,
+      sortConfig,
+      startDate,
+    ],
   );
 
   const resetFilters = () => {
@@ -894,21 +1101,53 @@ useEffect(() => {
     );
   };
 
+  const showTransactionShellLoading = isTransactionsView && isInitialLoad;
+  const showBlockingOverlay = isInitialLoad && !showTransactionShellLoading;
+  const showTransactionResultsLoading =
+    isTransactionsView && (isLoadingPage || showTransactionShellLoading);
+
+  const renderSummaryValue = (value) => {
+    if (showTransactionShellLoading) {
+      return <span className="summary-value-skeleton" aria-hidden="true" />;
+    }
+
+    return (
+      <>
+        ₹
+        {Number(value).toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+        })}
+      </>
+    );
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // JSX
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {isInitialLoad && <LoadingOverlay />}
+      {showBlockingOverlay && <LoadingOverlay />}
       {pendingNavigation && !isInitialLoad && (
         <LoadingOverlay message={pendingNavigation} />
       )}
-      <div className="container">
+      <div className="container expense-shell">
         {/* ── Header ── */}
         <div className="header">
-          <h1>Expense Tracker</h1>
+          <div className="header-copy">
+            <span className="view-badge">
+              {isDashboardView ? "Dashboard" : "Transactions"}
+            </span>
+            <h1>
+              {isDashboardView ? "Expense command center" : "Transaction workspace"}
+            </h1>
+            <p>
+              {isDashboardView
+                ? "Track balances, spot patterns, and jump into the right records faster."
+                : "Search, sort, and manage every entry from one focused workspace."}
+            </p>
+          </div>
           <div className="header-right">
-            <span id="currentDate" className="current-month" />
+            <span className="current-month">{currentDateLabel}</span>
             <div className="button-group">
               <button
                 className="add-btn"
@@ -916,7 +1155,12 @@ useEffect(() => {
                 onClick={() =>
                   navigateWithLoader(
                     "/add-transaction",
-                    { state: { returnPage: currentPage } },
+                    {
+                      state: {
+                        returnPage: currentPage,
+                        returnPath: location.pathname,
+                      },
+                    },
                     "Opening transaction form...",
                   )
                 }
@@ -963,12 +1207,17 @@ useEffect(() => {
                   <div className="profile-menu">
                     {[
                       {
-                        path: "/expense-tracker",
-                        icon: "fa-th-large",
-                        label: "Dashboard",
-                        sub: "View overview and analytics",
-                        cls: "bg-green",
-                        message: "Opening dashboard...",
+                        path: "/transactions",
+                        icon: "fa-table",
+                        label: "Transactions",
+                        sub: "Open the full transaction table",
+                        cls: "bg-indigo",
+                        message: "Opening transactions...",
+                        state: {
+                          prefillFilters: currentFilters,
+                          returnPage: currentPage,
+                          bootstrapData: buildBootstrapData(),
+                        },
                       },
                       {
                         path: "/manage-finances",
@@ -991,7 +1240,7 @@ useEffect(() => {
                         icon: "fa-cog",
                         label: "Manage Categories",
                         sub: "Organize expenses",
-                        cls: "bg-indigo",
+                        cls: "bg-purple",
                         message: "Opening categories...",
                       },
                       {
@@ -1002,13 +1251,13 @@ useEffect(() => {
                         cls: "bg-violet",
                         message: "Opening labels...",
                       },
-                    ].map(({ path, icon, label, sub, cls, message }) => (
+                    ].map(({ path, icon, label, sub, cls, message, state }) => (
                       <button
                         key={path}
                         type="button"
                         className="profile-item"
                         disabled={!!pendingNavigation}
-                        onClick={() => navigateWithLoader(path, {}, message)}
+                        onClick={() => navigateWithLoader(path, { state }, message)}
                       >
                         <div className={`icon ${cls}`}>
                           <i className={`fas ${icon}`} />
@@ -1020,6 +1269,42 @@ useEffect(() => {
                         <i className="fas fa-chevron-right arrow" />
                       </button>
                     ))}
+                  </div>
+                  <div className="theme-section">
+                    <div className="theme-section-copy">
+                      <strong>Theme</strong>
+                      <span>Personalize your workspace colors.</span>
+                    </div>
+                    <div
+                      className="theme-options"
+                      role="radiogroup"
+                      aria-label="Choose app theme"
+                    >
+                      {THEME_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={theme === option.id}
+                          className={`theme-option ${theme === option.id ? "active" : ""}`}
+                          onClick={() => setTheme(option.id)}
+                        >
+                          <span className="theme-option-swatch" aria-hidden="true">
+                            {option.preview.map((color) => (
+                              <span
+                                key={color}
+                                className="theme-option-color"
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </span>
+                          <span className="theme-option-labels">
+                            <strong>{option.label}</strong>
+                            <small>{option.description}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="profile-footer">
                     <button className="logout-btn" onClick={handleLogout}>
@@ -1053,341 +1338,337 @@ useEffect(() => {
           }
           resetFilters={resetFilters}
           labelMap={labelMap}
-          loading={isLoadingPage}
+          loading={showTransactionResultsLoading || isLoadingPage}
         />
 
         {/* ── Summary ── */}
-        <div className="summary-section">
+        <div
+          className="summary-section"
+          aria-busy={showTransactionShellLoading ? "true" : "false"}
+        >
           <h2 className="summary-title">
-            Summary
+            {isDashboardView ? "Dashboard overview" : "Transaction snapshot"}
             {hasActiveFilters && (
-              <span
-                style={{
-                  marginLeft: "10px",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "#4361ee",
-                  background: "#eef2ff",
-                  padding: "3px 10px",
-                  borderRadius: "20px",
-                  verticalAlign: "middle",
-                  border: "1px solid #c7d2fe",
-                }}
-              >
-                Filtered view
+              <span className="filtered-pill">Filtered view</span>
+            )}
+            {showTransactionShellLoading && (
+              <span className="summary-loading-pill" role="status" aria-live="polite">
+                <span className="inline-spinner" aria-hidden="true" />
+                Loading workspace...
               </span>
             )}
           </h2>
           <div className="summary-cards">
             <div className="summary-card balance">
               <h3>Current Balance</h3>
-              <p>
-                ₹
-                {Number(finalBalance).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
+              <p>{renderSummaryValue(finalBalance)}</p>
             </div>
             <div className="summary-card income">
               <h3>Total Income</h3>
-              <p>
-                ₹
-                {Number(totalIncome).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
+              <p>{renderSummaryValue(totalIncome)}</p>
             </div>
             <div className="summary-card expense">
               <h3>Total Expense</h3>
-              <p>
-                ₹
-                {Number(totalExpense).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
+              <p>{renderSummaryValue(totalExpense)}</p>
             </div>
           </div>
 
-          <DashboardInsights
-            analytics={analytics}
-            hasActiveFilters={hasActiveFilters}
-            selectedType={selectedType}
-            activeItemKey={activeInsightKey}
-            onSelectItem={handleInsightSelection}
-          />
+          {isDashboardView ? (
+            <>
+              <DashboardInsights
+                analytics={analytics}
+                hasActiveFilters={hasActiveFilters}
+                selectedType={selectedType}
+                activeItemKey={activeInsightKey}
+                onSelectItem={handleInsightSelection}
+              />
+              <div className="dashboard-cta-card">
+                <div>
+                  <strong>Need entry-level detail?</strong>
+                  <p>
+                    Open the Transactions workspace to search, sort, and manage matching records.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="dashboard-cta-btn"
+                  onClick={() =>
+                    navigateWithLoader(
+                      "/transactions",
+                      {
+                        state: {
+                          prefillFilters: currentFilters,
+                          returnPage: currentPage,
+                          bootstrapData: buildBootstrapData(),
+                        },
+                      },
+                      "Opening transactions...",
+                    )
+                  }
+                >
+                  Open Transactions
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
 
-        {/* ── Table ── */}
-        <div className="table-wrapper" ref={transactionsSectionRef}>
-          <h2 className="month-heading">
-            Transactions
-            {isLoadingPage && !isInitialLoad && (
-              <span
-                style={{
-                  marginLeft: "10px",
-                  fontSize: "13px",
-                  color: "#3f51b5",
-                  fontWeight: 400,
-                  verticalAlign: "middle",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 14,
-                    height: 14,
-                    border: "2px solid #c7d2fe",
-                    borderTop: "2px solid #3f51b5",
-                    borderRadius: "50%",
-                    animation: "spin 0.8s linear infinite",
-                    marginRight: 6,
-                    verticalAlign: "middle",
-                  }}
-                />
-                Loading…
-              </span>
-            )}
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                {renderColumnHeader("date", "Date", "Search date…", "date")}
-                {renderColumnHeader(
-                  "category",
-                  "Category",
-                  "Search category…",
-                  "category",
+        {isTransactionsView && (
+          <>
+            {/* ── Table ── */}
+            <div
+              className="table-wrapper"
+              ref={transactionsSectionRef}
+              aria-busy={showTransactionResultsLoading ? "true" : "false"}
+            >
+              <h2 className="month-heading">
+                Transactions
+                {showTransactionResultsLoading && (
+                  <span className="table-loading-indicator">
+                    <span className="table-loading-spinner" />
+                    {showTransactionShellLoading ? "Preparing your workspace..." : "Loading…"}
+                  </span>
                 )}
-                {renderColumnHeader(
-                  "comments",
-                  "Comments",
-                  "Search comments…",
-                  "comments",
-                )}
-                {renderColumnHeader("label", "Label", "Search label…", "type")}
-                {renderColumnHeader("debit", "Debit", "Search debit…", "debit")}
-                {renderColumnHeader(
-                  "credit",
-                  "Credit",
-                  "Search credit…",
-                  "credit",
-                )}
-                {renderColumnHeader(
-                  "balance",
-                  "Balance",
-                  "Search balance…",
-                  "balance",
-                )}
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingPage ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} style={{ padding: "14px 12px" }}>
-                        <div
-                          className="skeleton-cell"
-                          style={{
-                            width: j === 2 ? "75%" : j === 7 ? "55%" : "65%",
-                          }}
-                        />
-                      </td>
-                    ))}
+              </h2>
+              <table>
+                <thead>
+                  <tr>
+                    {renderColumnHeader("date", "Date", "Search date…", "date")}
+                    {renderColumnHeader(
+                      "category",
+                      "Category",
+                      "Search category…",
+                      "category",
+                    )}
+                    {renderColumnHeader(
+                      "comments",
+                      "Comments",
+                      "Search comments…",
+                      "comments",
+                    )}
+                    {renderColumnHeader("label", "Label", "Search label…", "type")}
+                    {renderColumnHeader("debit", "Debit", "Search debit…", "debit")}
+                    {renderColumnHeader(
+                      "credit",
+                      "Credit",
+                      "Search credit…",
+                      "credit",
+                    )}
+                    {renderColumnHeader(
+                      "balance",
+                      "Balance",
+                      "Search balance…",
+                      "balance",
+                    )}
+                    <th>Actions</th>
                   </tr>
-                ))
-              ) : transactions.length > 0 ? (
-                transactions.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{formatDate(entry.date)}</td>
-                    <td>{entry.category}</td>
-                    <td>{entry.comments || "-"}</td>
-                    <td>
-                      {(() => {
-                        const validLabels = Array.isArray(entry.labelIds)
-                          ? entry.labelIds.filter((lid) => labelMap[lid])
-                          : [];
-                        return validLabels.length > 0 ? (
-                          validLabels.map((lid) => (
-                            <span
-                              key={lid}
-                              className="label-badge"
+                </thead>
+                <tbody>
+                  {showTransactionResultsLoading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 8 }).map((_, j) => (
+                          <td key={j} style={{ padding: "14px 12px" }}>
+                            <div
+                              className="skeleton-cell"
                               style={{
-                                backgroundColor: `${labelMap[lid].color || "#6c5ce7"}22`,
-                                color: labelMap[lid].color || "#6c5ce7",
-                                border: `1px solid ${labelMap[lid].color || "#6c5ce7"}`,
+                                width: j === 2 ? "75%" : j === 7 ? "55%" : "65%",
                               }}
-                            >
-                              {labelMap[lid].name}
-                            </span>
-                          ))
-                        ) : (
-                          <span>-</span>
-                        );
-                      })()}
-                    </td>
-                    <td
-                      className={entry.type === "debit" ? "debit-amount" : ""}
-                    >
-                      {entry.type === "debit" ? (
-                        <strong>
-                          {Number(entry.amount).toLocaleString("en-IN", {
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : transactions.length > 0 ? (
+                    transactions.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDate(entry.date)}</td>
+                        <td>{entry.category}</td>
+                        <td>{entry.comments || "-"}</td>
+                        <td>
+                          {(() => {
+                            const validLabels = Array.isArray(entry.labelIds)
+                              ? entry.labelIds.filter((lid) => labelMap[lid])
+                              : [];
+                            return validLabels.length > 0 ? (
+                              validLabels.map((lid) => (
+                                <span
+                                  key={lid}
+                                  className="label-badge"
+                                  style={{
+                                    backgroundColor: `${labelMap[lid].color || "#6c5ce7"}22`,
+                                    color: labelMap[lid].color || "#6c5ce7",
+                                    border: `1px solid ${labelMap[lid].color || "#6c5ce7"}`,
+                                  }}
+                                >
+                                  {labelMap[lid].name}
+                                </span>
+                              ))
+                            ) : (
+                              <span>-</span>
+                            );
+                          })()}
+                        </td>
+                        <td
+                          className={entry.type === "debit" ? "debit-amount" : ""}
+                        >
+                          {entry.type === "debit" ? (
+                            <strong>
+                              {Number(entry.amount).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </strong>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td
+                          className={entry.type === "credit" ? "credit-amount" : ""}
+                        >
+                          {entry.type === "credit" ? (
+                            <strong>
+                              {Number(entry.amount).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </strong>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td
+                          className={
+                            entry.runningBalance < 0
+                              ? "negative-balance"
+                              : "positive-balance"
+                          }
+                        >
+                          {Number(entry.runningBalance).toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                           })}
-                        </strong>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td
-                      className={entry.type === "credit" ? "credit-amount" : ""}
-                    >
-                      {entry.type === "credit" ? (
-                        <strong>
-                          {Number(entry.amount).toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </strong>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td
-                      className={
-                        entry.runningBalance < 0
-                          ? "negative-balance"
-                          : "positive-balance"
-                      }
-                    >
-                      {Number(entry.runningBalance).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </td>
-                    <td className="action-cell">
-                      <span
-                        className="action-icon edit"
-                        title="Edit"
-                        onClick={() =>
-                          navigate("/edit-transaction", {
-                            state: {
-                              transaction: entry,
-                              isContactTransaction: !!entry.contactId,
-                              returnPage: currentPage,
-                            },
-                          })
-                        }
+                        </td>
+                        <td className="action-cell">
+                          <span
+                            className="action-icon edit"
+                            title="Edit"
+                            onClick={() =>
+                              navigate("/edit-transaction", {
+                                state: {
+                                  transaction: entry,
+                                  isContactTransaction: !!entry.contactId,
+                                  returnPage: currentPage,
+                                  returnPath: location.pathname,
+                                },
+                              })
+                            }
+                          >
+                            <i className="fas fa-edit" />
+                          </span>
+                          <span
+                            className="action-icon delete"
+                            title="Delete"
+                            onClick={() => {
+                              setTransactionToDelete(entry.id);
+                              setShowDeleteModal(true);
+                            }}
+                          >
+                            <i className="fas fa-trash" />
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="8"
+                        style={{ textAlign: "center", padding: "1rem" }}
                       >
-                        <i className="fas fa-edit" />
-                      </span>
-                      <span
-                        className="action-icon delete"
-                        title="Delete"
-                        onClick={() => {
-                          setTransactionToDelete(entry.id);
-                          setShowDeleteModal(true);
-                        }}
+                        No transactions found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Pagination ── */}
+            {totalPages > 1 && (
+              <div className="pagination-bar">
+                <button
+                  className="pg-btn pg-edge"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1 || isLoadingPage}
+                  title="First page"
+                >
+                  «
+                </button>
+
+                <button
+                  className="pg-btn pg-prev-next"
+                  onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
+                  disabled={currentPage === 1 || isLoadingPage}
+                  title="Previous page"
+                >
+                  ‹
+                </button>
+
+                <div className="pg-numbers">
+                  {(() => {
+                    const total = totalPages || 1;
+                    const delta = 2;
+                    const start = Math.max(1, currentPage - delta);
+                    const end = Math.min(total, currentPage + delta);
+                    const pages = [];
+                    for (let p = start; p <= end; p++) pages.push(p);
+                    return pages.map((p) => (
+                      <button
+                        key={p}
+                        className={`pg-btn pg-num ${p === currentPage ? "pg-active" : ""}`}
+                        onClick={() => handlePageChange(p)}
+                        disabled={isLoadingPage}
                       >
-                        <i className="fas fa-trash" />
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan="8"
-                    style={{ textAlign: "center", padding: "1rem" }}
-                  >
-                    No transactions found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-{/* ── Pagination ── */}
-{totalPages > 1 && (
-  <div className="pagination-bar">
-    {/* First */}
-    <button
-      className="pg-btn pg-edge"
-      onClick={() => handlePageChange(1)}
-      disabled={currentPage === 1 || isLoadingPage}
-      title="First page"
-    >
-      «
-    </button>
+                        {p}
+                      </button>
+                    ));
+                  })()}
+                </div>
 
-    {/* Previous */}
-    <button
-      className="pg-btn pg-prev-next"
-      onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-      disabled={currentPage === 1 || isLoadingPage}
-      title="Previous page"
-    >
-      ‹
-    </button>
+                <button
+                  className="pg-btn pg-prev-next"
+                  onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
+                  disabled={currentPage >= totalPages || isLoadingPage}
+                  title="Next page"
+                >
+                  ›
+                </button>
 
-    {/* Page number buttons */}
-    <div className="pg-numbers">
-      {(() => {
-        const total = totalPages || 1;
-        const delta = 2;
-        const start = Math.max(1, currentPage - delta);
-        const end = Math.min(total, currentPage + delta);
-        const pages = [];
-        for (let p = start; p <= end; p++) pages.push(p);
-        return pages.map((p) => (
-          <button
-            key={p}
-            className={`pg-btn pg-num ${p === currentPage ? "pg-active" : ""}`}
-            onClick={() => handlePageChange(p)}
-            disabled={isLoadingPage}
-          >
-            {p}
-          </button>
-        ));
-      })()}
-    </div>
+                <button
+                  className="pg-btn pg-edge"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage >= totalPages || isLoadingPage}
+                  title="Last page"
+                >
+                  »
+                </button>
 
-    {/* Next */}
-    <button
-      className="pg-btn pg-prev-next"
-      onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-      disabled={currentPage >= totalPages || isLoadingPage}
-      title="Next page"
-    >
-      ›
-    </button>
+                <span className="pg-info">
+                  {currentPage} / {totalPages}
+                </span>
+              </div>
+            )}
+          </>
+        )}
 
-    {/* Last */}
-    <button
-      className="pg-btn pg-edge"
-      onClick={() => handlePageChange(totalPages)}
-      disabled={currentPage >= totalPages || isLoadingPage}
-      title="Last page"
-    >
-      »
-    </button>
-
-    {/* Page info */}
-    <span className="pg-info">
-      {currentPage} / {totalPages}
-    </span>
-  </div>
-)}
-
-        {/* ── Footer ── */}
-        <div className="footer">
-          <button
-            className="export-pdf-fab"
-            onClick={handleExportPDF}
-            title="Export to PDF"
-          >
-            📄
-          </button>
-        </div>
+        {isTransactionsView && (
+          <div className="footer">
+            <button
+              className="export-pdf-fab"
+              onClick={handleExportPDF}
+              title="Export to PDF"
+            >
+              📄
+            </button>
+          </div>
+        )}
       </div>
 
       <DeleteModal

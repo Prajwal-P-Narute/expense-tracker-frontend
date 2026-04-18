@@ -146,7 +146,7 @@ export default function ManageLabel() {
   };
 
   return (
-    <div className="container">
+    <div className="container label-manager">
       <header>
         <h1>Manage Labels</h1>
         <p className="subtitle">

@@ -298,6 +298,130 @@ input:focus, select:focus, textarea:focus {
   color: #fff;
 }
 
+/* Modern transaction form */
+.transaction-form-shell {
+  max-width: 760px;
+  margin: 32px auto;
+  padding: 28px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
+}
+
+.transaction-form-shell .header {
+  padding: 0 0 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.transaction-form-shell h1 {
+  color: #0f172a;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+}
+
+.transaction-form-shell form {
+  display: grid;
+  gap: 18px;
+}
+
+.transaction-form-shell .back-btn {
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.transaction-form-shell .form-group {
+  margin-bottom: 0;
+}
+
+.transaction-form-shell label {
+  color: #334155;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.transaction-form-shell input,
+.transaction-form-shell select,
+.transaction-form-shell textarea {
+  border-radius: 16px;
+  border: 1px solid #dbe4f0;
+  padding: 14px 16px;
+  background: #ffffff;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.transaction-form-shell input:focus,
+.transaction-form-shell select:focus,
+.transaction-form-shell textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.14);
+}
+
+.transaction-form-shell .transaction-type {
+  border-radius: 18px;
+  border: 1px solid #dbe4f0;
+  padding: 4px;
+  background: #f8fafc;
+  margin-bottom: 0;
+}
+
+.transaction-form-shell .transaction-type-btn {
+  border-radius: 14px;
+  background: transparent;
+  color: #475569;
+  padding: 12px 14px;
+}
+
+.transaction-form-shell .transaction-type-btn.active {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.18);
+}
+
+.transaction-form-shell .labels-group {
+  gap: 10px;
+}
+
+.transaction-form-shell .label-chip {
+  border-radius: 999px;
+  padding: 8px 14px;
+  border: 1px solid #dbe4f0;
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.transaction-form-shell .label-chip.selected {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  border-color: transparent;
+}
+
+.transaction-form-shell .submit-btn {
+  margin-top: 8px;
+  border-radius: 18px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #10b981, #0f766e);
+  box-shadow: 0 18px 34px rgba(16, 185, 129, 0.18);
+}
+
+@media (max-width: 640px) {
+  .transaction-form-shell {
+    margin: 16px auto;
+    padding: 20px;
+    border-radius: 24px;
+  }
+
+  .transaction-form-shell .header {
+    align-items: flex-start;
+  }
+
+  .transaction-form-shell .back-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
 
 
 

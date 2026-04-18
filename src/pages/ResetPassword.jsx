@@ -3,6 +3,8 @@ import {  useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api";
 import axios from "axios";
 import { toast } from "react-toastify";
+import logo from "../assets/expenseimg.png";
+import "./Auth.css";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -87,73 +89,113 @@ const ResetPassword = () => {
   };
 
   return (
-    <div
-      className="d-flex align-items-center justify-content-center vh-100"
-      style={{ background: "linear-gradient(90deg, #6a5af9, #8268f9)" }}
-    >
-      {/* Step 1: Email Form */}
+    <div className="auth-shell">
       {!isEmailSent && (
-        <div className="rounded-4 p-5 bg-white text-center" style={{ width: "100%", maxWidth: "400px" }}>
-          <h4>Reset Password</h4>
-          <p>Enter your registered email address</p>
-          <form onSubmit={sendOtp}>
-            <input
-              type="email"
-              className="form-control mb-3"
-              placeholder="Enter email address"
-              onChange={(e) => setEmail(e.target.value)}
-              value={email}
-              required
-            />
-            <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-              {loading ? "Sending OTP..." : "Send OTP"}
+        <div className="auth-panel">
+          <div className="auth-brand">
+            <div className="auth-brand-row">
+              <img src={logo} alt="Expense Tracker logo" className="auth-logo" />
+              <div>
+                <span className="auth-kicker">Security</span>
+                <h1 className="auth-title">Reset password</h1>
+              </div>
+            </div>
+            <p className="auth-subtitle">
+              Enter your registered email and we’ll send a one-time code to verify the request.
+            </p>
+          </div>
+          <form className="auth-form" onSubmit={sendOtp}>
+            <label className="auth-field" htmlFor="reset-email">
+              Email address
+              <input
+                id="reset-email"
+                type="email"
+                className="auth-input"
+                placeholder="you@example.com"
+                onChange={(e) => setEmail(e.target.value)}
+                value={email}
+                required
+              />
+            </label>
+            <button type="submit" className="auth-action" disabled={loading}>
+              {loading ? (
+                <span className="btn-with-spinner">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  Sending OTP...
+                </span>
+              ) : (
+                "Send OTP"
+              )}
             </button>
           </form>
         </div>
       )}
 
-      {/* Step 2: OTP Form */}
       {isEmailSent && !isOtpSubmitted && (
-        <div className="p-5 rounded-4 bg-white" style={{ width: "100%", maxWidth: "400px" }}>
-          <h4 className="text-center">Verify OTP</h4>
-          <p className="text-center">Check your email for the OTP code</p>
-          <div className="d-flex justify-content-center gap-2 mb-3">
-            {[...Array(6)].map((_, i) => (
-              <input
-                key={i}
-                type="text"
-                maxLength={1}
-                className="form-control text-center fs-4"
-                style={{ width: "40px" }}
-                ref={(el) => (inputRef.current[i] = el)}
-                onChange={(e) => handleChange(e, i)}
-                onKeyDown={(e) => handleKeyDown(e, i)}
-                onPaste={handlePaste}
-              />
-            ))}
+        <div className="auth-panel">
+          <div className="auth-brand">
+            <span className="auth-step">Step 2 of 3</span>
+            <h1 className="auth-title">Verify OTP</h1>
+            <p className="auth-subtitle">Check your email and enter the 6-digit code below.</p>
           </div>
-          <button className="btn btn-primary w-100" disabled={loading} onClick={verifyOtp}>
-            {loading ? "Verifying..." : "Verify"}
-          </button>
+          <div className="auth-form">
+            <div className="auth-otp-grid">
+              {[...Array(6)].map((_, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  maxLength={1}
+                  className="auth-otp-input"
+                  ref={(el) => (inputRef.current[i] = el)}
+                  onChange={(e) => handleChange(e, i)}
+                  onKeyDown={(e) => handleKeyDown(e, i)}
+                  onPaste={handlePaste}
+                />
+              ))}
+            </div>
+            <button className="auth-action" disabled={loading} onClick={verifyOtp}>
+              {loading ? (
+                <span className="btn-with-spinner">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  Verifying...
+                </span>
+              ) : (
+                "Verify"
+              )}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Step 3: New Password Form */}
       {isOtpSubmitted && (
-        <div className="rounded-4 p-5 bg-white" style={{ width: "100%", maxWidth: "400px" }}>
-          <h4>New Password</h4>
-          <p>Enter your new password</p>
-          <form onSubmit={resetPassword}>
-            <input
-              type="password"
-              className="form-control mb-3"
-              placeholder="********"
-              onChange={(e) => setNewPassword(e.target.value)}
-              value={newPassword}
-              required
-            />
-            <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-              {loading ? "Resetting..." : "Reset Password"}
+        <div className="auth-panel">
+          <div className="auth-brand">
+            <span className="auth-step">Step 3 of 3</span>
+            <h1 className="auth-title">Set new password</h1>
+            <p className="auth-subtitle">Choose a fresh password and jump back into your account.</p>
+          </div>
+          <form className="auth-form" onSubmit={resetPassword}>
+            <label className="auth-field" htmlFor="newPassword">
+              New password
+              <input
+                id="newPassword"
+                type="password"
+                className="auth-input"
+                placeholder="Enter your new password"
+                onChange={(e) => setNewPassword(e.target.value)}
+                value={newPassword}
+                required
+              />
+            </label>
+            <button type="submit" className="auth-action" disabled={loading}>
+              {loading ? (
+                <span className="btn-with-spinner">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  Resetting...
+                </span>
+              ) : (
+                "Reset Password"
+              )}
             </button>
           </form>
         </div>

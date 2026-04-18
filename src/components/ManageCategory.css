@@ -504,3 +504,107 @@ input:checked + .slider:before {
     width: 100%;
   }
 }
+
+/* Modern category manager */
+.category-manager {
+  max-width: 1240px;
+  padding: 28px 20px 40px;
+}
+
+.category-manager > header {
+  padding: 28px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 30%),
+    linear-gradient(135deg, #0f172a, #1e293b);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+}
+
+.category-manager > header h1,
+.category-manager > header .subtitle {
+  color: #f8fafc;
+}
+
+.category-manager .categories-container {
+  gap: 20px;
+}
+
+.category-manager .category-section {
+  min-width: 0;
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
+}
+
+.category-manager .section-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 16px;
+}
+
+.category-manager .count-badge,
+.category-manager .status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.category-manager .add-category-form {
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 24px;
+}
+
+.category-manager .add-category-input {
+  border-radius: 16px;
+  border: 1px solid #dbe4f0;
+  padding: 14px 16px;
+}
+
+.category-manager .add-btn {
+  border-radius: 16px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+}
+
+.category-manager .category-item {
+  border-radius: 18px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.category-manager .category-actions {
+  gap: 8px;
+}
+
+.category-manager .edit-btn,
+.category-manager .delete-btn {
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.category-manager .modal-content {
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.18);
+}
+
+@media (max-width: 768px) {
+  .category-manager {
+    padding: 18px 14px 32px;
+  }
+
+  .category-manager > header,
+  .category-manager .category-section {
+    border-radius: 22px;
+    padding: 20px;
+  }
+}
