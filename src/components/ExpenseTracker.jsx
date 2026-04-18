@@ -291,7 +291,7 @@ const ExpenseTracker = ({
       setIsLoadingPage(false);
       setIsInitialLoad(false);
     }
-  }, [isDashboardView, token]);
+  }, [isDashboardView]);
 
   useEffect(() => {
     if (token) doFetch();
