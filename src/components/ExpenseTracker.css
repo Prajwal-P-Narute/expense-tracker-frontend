@@ -615,6 +615,12 @@ tr:hover {
   color: var(--text-primary);
 }
 
+.date-filter select option,
+.date-filter select optgroup {
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
 .date-filter select:focus,
 .date-filter input:focus,
 .multi-select-search:focus,
@@ -727,6 +733,7 @@ tr:hover {
   border-radius: 12px;
   cursor: pointer;
   background: transparent;
+  color: var(--text-primary);
 }
 
 .multi-select-option:hover {
@@ -749,6 +756,12 @@ tr:hover {
   padding: 8px 4px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.multi-select-search::placeholder,
+.search-popup input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 /* Responsive */
@@ -894,9 +907,12 @@ tr:hover {
   top: 56px;
   right: 0;
   width: 320px;
-  background: var(--surface-card);
+  background:
+    linear-gradient(180deg, var(--surface-card), var(--surface-elevated));
   border-radius: 18px;
+  border: 1px solid var(--border-soft);
   box-shadow: var(--shadow-strong);
+  color: var(--text-primary);
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
@@ -923,6 +939,7 @@ tr:hover {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .profile-header p {
@@ -1048,6 +1065,7 @@ tr:hover {
 .profile-item span {
   font-weight: 600;
   font-size: 15px;
+  color: var(--text-primary);
 }
 
 .profile-item small {
@@ -1058,7 +1076,7 @@ tr:hover {
 
 .profile-item .arrow {
   margin-left: auto;
-  color: #bbb;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -1083,6 +1101,68 @@ tr:hover {
 .profile-footer {
   border-top: 1px solid var(--border-soft);
   padding: 14px 20px;
+}
+
+:root[data-color-mode="dark"] .profile-dropdown {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 28, 51, 0.98));
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+:root[data-color-mode="dark"] .date-filter,
+:root[data-color-mode="dark"] .multi-select-dropdown,
+:root[data-color-mode="dark"] .search-popup {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 28, 51, 0.98));
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+:root[data-color-mode="dark"] .date-filter select,
+:root[data-color-mode="dark"] .date-filter input,
+:root[data-color-mode="dark"] .multi-select-trigger,
+:root[data-color-mode="dark"] .multi-select-search,
+:root[data-color-mode="dark"] .search-popup input {
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.28);
+  color-scheme: dark;
+}
+
+:root[data-color-mode="dark"] .date-filter select option,
+:root[data-color-mode="dark"] .date-filter select optgroup {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+:root[data-color-mode="dark"] .multi-select-option:hover,
+:root[data-color-mode="dark"] .search-popup li:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+:root[data-color-mode="dark"] .date-filter input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-color-mode="dark"] .date-filter input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.92);
+  opacity: 0.9;
+}
+
+:root[data-color-mode="dark"] .profile-header {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.46), rgba(15, 23, 42, 0));
+}
+
+:root[data-color-mode="dark"] .profile-item:hover,
+:root[data-color-mode="dark"] .theme-option:hover {
+  background: rgba(59, 130, 246, 0.16);
+}
+
+:root[data-color-mode="dark"] .theme-option.active {
+  border-color: rgba(96, 165, 250, 0.58);
+  background: rgba(37, 99, 235, 0.2);
+}
+
+:root[data-color-mode="dark"] .theme-option-swatch {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(148, 163, 184, 0.26);
 }
 
 .logout-btn {
@@ -1149,6 +1229,7 @@ tr:hover {
 .search-popup li {
   padding: 4px;
   cursor: pointer;
+  color: var(--text-primary);
 }
 
 .search-popup li:hover {
@@ -1685,6 +1766,23 @@ tr:hover {
   padding: 6px 10px;
   border-radius: 999px;
   font-weight: 700;
+}
+
+.expense-shell .timestamp-cell {
+  min-width: 140px;
+}
+
+.expense-shell .timestamp-cell strong {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.expense-shell .timestamp-cell small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .expense-shell .action-cell {

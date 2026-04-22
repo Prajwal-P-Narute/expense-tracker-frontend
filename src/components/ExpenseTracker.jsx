@@ -8,8 +8,6 @@ import React, {
 import "./ExpenseTracker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import DeleteModal from "./DeleteModal";
 import DashboardInsights from "./DashboardInsights";
 import { fetchCategories } from "../utils/categoryApi";
@@ -19,6 +17,7 @@ import {
   deleteTransaction,
   fetchTransactionWorkspace,
 } from "../utils/transactionApi";
+import { generateExpensePDF } from "../utils/generatePDF";
 import TransactionFilter from "./TransactionFilter";
 import { THEME_OPTIONS } from "../utils/theme";
 
@@ -321,8 +320,7 @@ const ExpenseTracker = ({
 
   useEffect(() => {
     if (token) doFetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchTrigger]);
+  }, [doFetch, fetchTrigger, token]);
 
   // ─────────────────────────────────────────────────────────────────────────────
 // AUTH + initial load
@@ -631,6 +629,18 @@ useEffect(() => {
     return `${day}/${m}/${y}`;
   };
 
+  const formatTime = (timeValue) => {
+    if (!timeValue) return "";
+    const [rawHour = "00", rawMinute = "00"] = String(timeValue).split(":");
+    const hour = Number(rawHour);
+    const minute = Number(rawMinute);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
+
+    const hour12 = hour % 12 || 12;
+    const meridiem = hour >= 12 ? "PM" : "AM";
+    return `${String(hour12).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${meridiem}`;
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // Actions
   // ─────────────────────────────────────────────────────────────────────────
@@ -800,74 +810,146 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────────────────────
   // PDF Export
   // ─────────────────────────────────────────────────────────────────────────
-  const formatCurrency = (value) =>
-    Number(value || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+  const formatLongDate = (value) => {
+    if (!value) return "";
+    return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     });
+  };
 
-  const formatSelectedLabels = useCallback(
-    (labelIds = []) =>
-      labelIds
-        .map((id) => labelMap[id]?.name || id)
-        .filter(Boolean)
-        .join(", "),
-    [labelMap],
-  );
+  const getPdfTransactionType = (type) =>
+    String(type || "").toLowerCase() === "credit" ? "income" : "expense";
 
-  const appliedFilterRows = useMemo(() => {
-    const rows = [
-      ["Type", selectedType === "All" ? "All" : selectedType],
-      [
-        "Categories",
-        selectedCategories.length > 0
-          ? selectedCategories.join(", ")
-          : "All categories",
-      ],
-      [
-        "Date Range",
-        startDate && endDate
-          ? `${formatDate(startDate)} to ${formatDate(endDate)}`
-          : startDate
-            ? `From ${formatDate(startDate)}`
-            : endDate
-              ? `Until ${formatDate(endDate)}`
-              : "All dates",
-      ],
-      [
-        "Labels",
-        selectedLabels.length > 0
-          ? formatSelectedLabels(selectedLabels)
-          : "All labels",
-      ],
-      [
-        "Sort",
-        sortConfig?.key
-          ? `${sortConfig.key} (${sortConfig.direction || "desc"})`
-          : "Default newest-first order",
-      ],
-    ];
-
-    const searchSummary = Object.entries(columnSearch)
-      .filter(([, value]) => value.trim() !== "")
-      .map(([key, value]) => `${key}: ${value.trim()}`)
-      .join(" | ");
-
-    if (searchSummary) {
-      rows.push(["Search", searchSummary]);
+  const getReportPeriod = (reportTransactions) => {
+    if (startDate && endDate) {
+      return `${formatLongDate(startDate)} - ${formatLongDate(endDate)}`;
+    }
+    if (startDate) {
+      return `From ${formatLongDate(startDate)}`;
+    }
+    if (endDate) {
+      return `Until ${formatLongDate(endDate)}`;
     }
 
-    return rows;
-  }, [
-    columnSearch,
-    endDate,
-    selectedCategories,
-    selectedLabels,
-    selectedType,
-    sortConfig,
-    startDate,
-    formatSelectedLabels,
-  ]);
+    if (reportTransactions.length > 0) {
+      const dates = reportTransactions
+        .map((transaction) => transaction.date)
+        .filter(Boolean)
+        .sort();
+      return `${formatLongDate(dates[0])} - ${formatLongDate(dates[dates.length - 1])}`;
+    }
+
+    return new Date().toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const getReportDayCount = (reportTransactions) => {
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    if (startDate || endDate) {
+      const start = new Date(`${(startDate || endDate)}T00:00:00`);
+      const end = new Date(`${(endDate || startDate)}T00:00:00`);
+      return Math.max(1, Math.round((end - start) / msPerDay) + 1);
+    }
+
+    const dates = reportTransactions
+      .map((transaction) => transaction.date)
+      .filter(Boolean)
+      .sort();
+    if (dates.length === 0) return 1;
+
+    const start = new Date(`${dates[0]}T00:00:00`);
+    const end = new Date(`${dates[dates.length - 1]}T00:00:00`);
+    return Math.max(1, Math.round((end - start) / msPerDay) + 1);
+  };
+
+  const getCategoryBreakdown = (reportTransactions) => {
+    const expenseTransactions = reportTransactions.filter(
+      (transaction) => getPdfTransactionType(transaction.type) === "expense",
+    );
+    const sourceTransactions =
+      expenseTransactions.length > 0 ? expenseTransactions : reportTransactions;
+
+    const totals = new Map();
+    sourceTransactions.forEach((transaction) => {
+      const key = transaction.category || "Uncategorized";
+      totals.set(key, (totals.get(key) || 0) + (Number(transaction.amount) || 0));
+    });
+
+    const sorted = [...totals.entries()]
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((left, right) => right.amount - left.amount);
+
+    if (sorted.length > 5) {
+      const topItems = sorted.slice(0, 4);
+      const othersAmount = sorted
+        .slice(4)
+        .reduce((sum, item) => sum + item.amount, 0);
+      sorted.length = 0;
+      sorted.push(...topItems, { name: "Others", amount: othersAmount });
+    }
+
+    const totalAmount = sorted.reduce((sum, item) => sum + item.amount, 0);
+    return sorted.map((item) => ({
+      name: item.name,
+      amount: item.amount,
+      value:
+        totalAmount > 0
+          ? Number(((item.amount / totalAmount) * 100).toFixed(1))
+          : 0,
+    }));
+  };
+
+  const getMonthlyData = (reportTransactions, reportOpeningBalance = 0) => {
+    const monthlyMap = new Map();
+
+    [...reportTransactions]
+      .sort((left, right) => {
+        const leftDateTime = `${left.date || ""}T${left.time || "00:00:00"}`;
+        const rightDateTime = `${right.date || ""}T${right.time || "00:00:00"}`;
+        return leftDateTime.localeCompare(rightDateTime);
+      })
+      .forEach((transaction) => {
+      if (!transaction.date) return;
+      const monthKey = transaction.date.slice(0, 7);
+      const current = monthlyMap.get(monthKey) || {
+        monthKey,
+        income: 0,
+        expense: 0,
+        balance: reportOpeningBalance,
+      };
+      const amount = Number(transaction.amount) || 0;
+
+      if (getPdfTransactionType(transaction.type) === "income") {
+        current.income += amount;
+      } else {
+        current.expense += amount;
+      }
+
+      current.balance = Number(transaction.runningBalance ?? current.balance) || 0;
+      monthlyMap.set(monthKey, current);
+    });
+
+    return [...monthlyMap.values()]
+      .sort((left, right) => left.monthKey.localeCompare(right.monthKey))
+      .slice(-6)
+      .map((item) => ({
+        month: new Date(`${item.monthKey}-01T00:00:00`).toLocaleDateString(
+          "en-IN",
+          {
+            month: "short",
+            year: "2-digit",
+          },
+        ),
+        income: item.income,
+        expense: item.expense,
+        balance: item.balance,
+      }));
+  };
 
   const handleExportPDF = async () => {
     setIsExportingPdf(true);
@@ -883,160 +965,65 @@ useEffect(() => {
         sortBy: sortConfig?.key || null,
         sortDir: sortConfig?.direction || "desc",
       });
-
-      const doc = new jsPDF();
-    const now = new Date();
-    const dateStr = now.toISOString().split("T")[0];
-    const timeStr = `${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
-    const fileName = `ExpenseReport_${userName.replace(/\s+/g, "_")}_${dateStr}_${timeStr}.pdf`;
-
-      doc.setFillColor(248, 250, 252);
-      doc.rect(0, 0, 210, 297, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.setTextColor(15, 23, 42);
-      doc.text("Transaction Report", 14, 18);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Prepared on ${now.toLocaleString()}`, 14, 24);
-
-      autoTable(doc, {
-        startY: 32,
-        head: [["Applied Filter", "Value"]],
-        body: appliedFilterRows,
-        theme: "striped",
-        styles: {
-          fontSize: 10,
-          cellPadding: 3.5,
-          textColor: [30, 41, 59],
-        },
-        headStyles: {
-          fillColor: [37, 99, 235],
-          textColor: 255,
-          fontStyle: "bold",
-          halign: "left",
-        },
-        alternateRowStyles: { fillColor: [241, 245, 249] },
-        columnStyles: {
-          0: { cellWidth: 45, fontStyle: "bold" },
-          1: { cellWidth: "auto" },
-        },
-      });
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(15, 23, 42);
-      doc.text("Filtered Transactions", 14, doc.lastAutoTable.finalY + 12);
-
-      const rows = reportTransactions.map((txn) => {
-      const amt = Number(txn.amount) || 0;
-        const lbl = Array.isArray(txn.labelIds)
-          ? txn.labelIds
-              .map((id) => labelMap[id]?.name || "")
-              .filter(Boolean)
-              .join(", ")
-          : "-";
-        return [
-          formatDate(txn.date),
-          txn.category,
-          txn.comments || "-",
-          lbl || "-",
-          txn.type === "debit" ? "Debit" : "Credit",
-          formatCurrency(amt),
-          formatCurrency(txn.runningBalance),
-        ];
-      });
-
-      autoTable(doc, {
-        head: [
-          [
-            "Date",
-            "Category",
-            "Comments",
-            "Labels",
-            "Type",
-            "Amount",
-            "Balance",
-          ],
-        ],
-        body: rows,
-        startY: doc.lastAutoTable.finalY + 18,
-        theme: "striped",
-        styles: {
-          fontSize: 9,
-          valign: "middle",
-          cellPadding: 3,
-        },
-        headStyles: {
-          fillColor: [15, 23, 42],
-          textColor: 255,
-          halign: "left",
-          fontStyle: "bold",
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        bodyStyles: { textColor: [33, 33, 33] },
-        columnStyles: {
-          0: { halign: "center", cellWidth: 22 },
-          1: { cellWidth: 28 },
-          2: { halign: "left" },
-          3: { halign: "left", cellWidth: 34 },
-          4: { halign: "center", cellWidth: 18 },
-          5: { halign: "right", fontStyle: "bold", cellWidth: 24 },
-          6: { halign: "right", fontStyle: "bold", cellWidth: 24 },
-        },
-        didParseCell: (data) => {
-          if (data.section !== "body") return;
-
-          if (data.column.index === 4) {
-            const isDebit = data.row.raw[4] === "Debit";
-            data.cell.styles.textColor = isDebit ? [220, 38, 38] : [22, 163, 74];
-            data.cell.styles.fontStyle = "bold";
-          }
-
-          if (data.column.index === 5) {
-            const isDebit = data.row.raw[4] === "Debit";
-            data.cell.styles.textColor = isDebit ? [220, 38, 38] : [22, 163, 74];
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
-      });
-
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 12,
-        head: [["Show All Transactions Summary", "Value"]],
-        body: [
-          ["Matching Transactions", String(reportTransactions.length)],
-          ["Total Debit", `₹${formatCurrency(totalExpense)}`],
-          ["Total Credit", `₹${formatCurrency(totalIncome)}`],
-          ["Closing Balance", `₹${formatCurrency(finalBalance)}`],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 10,
-          cellPadding: 3.5,
-        },
-        headStyles: {
-          fillColor: [37, 99, 235],
-          textColor: 255,
-          fontStyle: "bold",
-        },
-        columnStyles: {
-          0: { fontStyle: "bold", cellWidth: 55 },
-          1: { halign: "right", cellWidth: 40 },
-        },
-      });
-
-      doc.setFontSize(10);
-      doc.setTextColor(80);
-      doc.text(
-        `Report Date: ${now.toLocaleString()}`,
-        200,
-        doc.internal.pageSize.height - 10,
-        { align: "right" },
+      const incomeTransactions = reportTransactions.filter(
+        (transaction) => getPdfTransactionType(transaction.type) === "income",
       );
-      doc.save(fileName);
+      const expenseTransactions = reportTransactions.filter(
+        (transaction) => getPdfTransactionType(transaction.type) === "expense",
+      );
+      const totalDays = getReportDayCount(reportTransactions);
+
+      const safeTotalIncome = Number(totalIncome) || 0;
+      const safeTotalExpense = Number(totalExpense) || 0;
+      const safeOpeningBalance = Number(openingBalance) || 0;
+      const safeFinalBalance = Number(finalBalance) || 0;
+
+      await generateExpensePDF({
+        userName: userName || "Expense Tracker User",
+        period: getReportPeriod(reportTransactions),
+        transactions: reportTransactions.map((transaction) => ({
+          date: formatLongDate(transaction.date),
+          description:
+            transaction.comments ||
+            (Array.isArray(transaction.labelIds)
+              ? transaction.labelIds
+                  .map((id) => labelMap[id]?.name)
+                  .filter(Boolean)
+                  .join(", ")
+              : "") ||
+            "No description",
+          category: transaction.category || "Uncategorized",
+          amount: Number(transaction.amount) || 0,
+          type: getPdfTransactionType(transaction.type),
+        })),
+        summary: {
+          totalIncome: safeTotalIncome,
+          totalExpense: safeTotalExpense,
+          currentBalance: safeFinalBalance,
+          openingBalance: safeOpeningBalance,
+          incomeCount: incomeTransactions.length,
+          expenseCount: expenseTransactions.length,
+          savingsRate:
+            safeTotalIncome > 0
+              ? Math.max(
+                  0,
+                  Math.round(((safeTotalIncome - safeTotalExpense) / safeTotalIncome) * 100),
+                )
+              : 0,
+          highestIncome: Math.max(
+            0,
+            ...incomeTransactions.map((transaction) => Number(transaction.amount) || 0),
+          ),
+          highestExpense: Math.max(
+            0,
+            ...expenseTransactions.map((transaction) => Number(transaction.amount) || 0),
+          ),
+          avgDailySpend: safeTotalExpense / totalDays,
+          totalDays: `${totalDays} day${totalDays === 1 ? "" : "s"}`,
+        },
+        categoryBreakdown: getCategoryBreakdown(reportTransactions),
+        monthlyData: getMonthlyData(reportTransactions, safeOpeningBalance),
+      });
     } catch (error) {
       toast.error("Failed to export filtered PDF report.");
     } finally {
@@ -1557,7 +1544,7 @@ useEffect(() => {
               <table className="transaction-table">
                 <thead>
                   <tr>
-                    {renderColumnHeader("date", "Date", "Search date…", "date")}
+                    {renderColumnHeader("date", "Timestamp", "Search date…", "date")}
                     {renderColumnHeader(
                       "category",
                       "Category",
@@ -1606,7 +1593,10 @@ useEffect(() => {
                   ) : transactions.length > 0 ? (
                     transactions.map((entry, index) => (
                       <tr key={entry.id} className={`transaction-row ${index % 2 === 0 ? "row-even" : "row-odd"}`}>
-                        <td>{formatDate(entry.date)}</td>
+                        <td className="timestamp-cell">
+                          <strong>{formatDate(entry.date)}</strong>
+                          <small>{formatTime(entry.time) || "--"}</small>
+                        </td>
                         <td>{entry.category}</td>
                         <td>{entry.comments || "-"}</td>
                         <td>

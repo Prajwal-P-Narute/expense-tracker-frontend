@@ -46,10 +46,27 @@ const TransactionForm = () => {
     return today.toISOString().split("T")[0];
   };
 
+  const getCurrentTime = () => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes(),
+    ).padStart(2, "0")}`;
+  };
+
+  const normalizeTimeValue = (value) => {
+    if (typeof value !== "string" || !value.trim()) return "";
+    const parts = value.trim().split(":");
+    if (parts.length < 2) return "";
+    return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+  };
+
   const [formData, setFormData] = useState({
     date: editingTransaction
       ? editingTransaction.date.split("T")[0]
       : getTodayDate(),
+    time: editingTransaction?.time
+      ? normalizeTimeValue(editingTransaction.time)
+      : getCurrentTime(),
     debitCategory:
       editingTransaction?.type === "debit" ? editingTransaction.category : "",
     creditCategory:
@@ -150,9 +167,11 @@ const TransactionForm = () => {
       return;
     }
     setSubmitting(true);
+    const submittedTime = normalizeTimeValue(formData.time) || getCurrentTime();
 
     const payload = {
       date: formData.date,
+      time: submittedTime,
       type,
       category:
         type === "debit" ? formData.debitCategory : formData.creditCategory,
@@ -167,36 +186,45 @@ const TransactionForm = () => {
 
     try {
       if (isEditMode) {
-  await updateTransaction(editingTransaction.id, payload);
-  toast.success("Transaction updated successfully!");
+        await updateTransaction(editingTransaction.id, payload);
+        toast.success("Transaction updated successfully!");
 
-  // Only re-compute the page when the date actually changed.
-  // If date is the same, the transaction stays in its original
-  // position so we navigate back to the page the user came from.
-  const originalDate = editingTransaction.date.split("T")[0];
-  const dateChanged  = originalDate !== formData.date;
+        // Only re-compute the page when the date actually changed.
+        // If date is the same, the transaction stays in its original
+        // position so we navigate back to the page the user came from.
+        const originalDate = editingTransaction.date.split("T")[0];
+        const originalTime = normalizeTimeValue(editingTransaction.time);
+        const dateChanged = originalDate !== formData.date;
+        const timeChanged = originalTime !== submittedTime;
 
-  let targetPage = returnPage;
-  if (dateChanged) {
-    const zeroBasedPage = await fetchTransactionPageNumber(
-      editingTransaction.id,
-      PAGE_SIZE,
-    );
-    targetPage = zeroBasedPage + 1;
-  }
+        let targetPage = returnPage;
+        if (dateChanged || timeChanged) {
+          const zeroBasedPage = await fetchTransactionPageNumber(
+            editingTransaction.id,
+            PAGE_SIZE,
+          );
+          targetPage = zeroBasedPage + 1;
+        }
 
-  navigate(
-    showContactSelect ? "/manage-finances" : returnPath,
-    { state: { refresh: true, returnPage: targetPage } },
-  );
-} else {
-        await createTransaction(payload);
+        navigate(showContactSelect ? "/manage-finances" : returnPath, {
+          state: { refresh: true, returnPage: targetPage },
+        });
+      } else {
+        const createdTransaction = await createTransaction(payload);
         toast.success("Transaction added successfully!");
 
-        navigate(
-          showContactSelect ? "/manage-finances" : returnPath,
-          { state: { refresh: true, returnPage: returnPage } },
-        );
+        let targetPage = returnPage;
+        if (!showContactSelect && createdTransaction?.id) {
+          const zeroBasedPage = await fetchTransactionPageNumber(
+            createdTransaction.id,
+            PAGE_SIZE,
+          );
+          targetPage = zeroBasedPage + 1;
+        }
+
+        navigate(showContactSelect ? "/manage-finances" : returnPath, {
+          state: { refresh: true, returnPage: targetPage },
+        });
       }
     } catch (error) {
       toast.error(error.message || "An error occurred.");
@@ -223,6 +251,20 @@ const TransactionForm = () => {
             id="date"
             name="date"
             value={formData.date}
+            onChange={handleChange}
+            disabled={submitting}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="time" className="required">
+            Time
+          </label>
+          <input
+            type="time"
+            id="time"
+            name="time"
+            value={formData.time}
             onChange={handleChange}
             disabled={submitting}
           />
