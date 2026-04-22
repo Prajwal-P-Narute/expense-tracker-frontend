@@ -3,11 +3,11 @@
   --secondary: #3a0ca3;
   --success: #28a745;
   --danger: #dc3545;
-  --light: #f8f9fa;
-  --dark: #212529;
-  --card-bg: #ffffff;
+  --light: var(--surface-bg);
+  --dark: var(--text-primary);
+  --card-bg: var(--surface-card);
   --gradient: linear-gradient(135deg, #4361ee, #3a0ca3);
-  --shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  --shadow: var(--shadow-soft);
   --radius: 12px;
   --transition: all 0.3s ease;
 }
@@ -22,7 +22,7 @@
   margin: 0 auto;
   padding: 20px;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
- background: linear-gradient(180deg, #eef1ff, #ffffff);
+ background: linear-gradient(180deg, var(--surface-muted), var(--surface-bg));
 }
 
 .fintrack-container header {
@@ -32,8 +32,8 @@
   padding: 18px 25px;
   margin-bottom: 30px;
   border-radius: var(--radius);
-  background: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-soft);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -235,11 +235,11 @@
 .fintrack-container .search-box input {
   width: 100%;
   padding: 12px 15px 12px 45px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--input-border);
   border-radius: var(--radius);
   font-size: 1rem;
-  background: #f8f9fa;
-  color: var(--dark);
+  background: var(--input-bg);
+  color: var(--text-primary);
   transition: var(--transition);
 }
 

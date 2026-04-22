@@ -15,6 +15,7 @@ import DashboardInsights from "./DashboardInsights";
 import { fetchCategories } from "../utils/categoryApi";
 import { fetchLabels } from "../utils/labelApi";
 import {
+  fetchAllTransactionsForFilters,
   deleteTransaction,
   fetchTransactionWorkspace,
 } from "../utils/transactionApi";
@@ -42,15 +43,37 @@ const EMPTY_ANALYTICS = {
   labels: { total: 0, maxAmount: 0, items: [] },
 };
 
+const normalizeSelectedValues = (values) => {
+  if (Array.isArray(values)) {
+    return [...new Set(
+      values
+        .filter((value) => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value) => value && value !== "All"),
+    )].sort((left, right) => left.localeCompare(right));
+  }
+
+  if (typeof values === "string") {
+    const trimmedValue = values.trim();
+    return trimmedValue && trimmedValue !== "All" ? [trimmedValue] : [];
+  }
+
+  return [];
+};
+
 const normalizeFiltersForComparison = (filters) => {
   const safeFilters = filters || {};
 
   return {
     selectedType: safeFilters.selectedType || "All",
-    selectedCategory: safeFilters.selectedCategory || "All",
+    selectedCategories: normalizeSelectedValues(
+      safeFilters.selectedCategories ?? safeFilters.selectedCategory,
+    ),
     startDate: safeFilters.startDate || "",
     endDate: safeFilters.endDate || "",
-    selectedLabel: safeFilters.selectedLabel || "All",
+    selectedLabels: normalizeSelectedValues(
+      safeFilters.selectedLabels ?? safeFilters.selectedLabel,
+    ),
     columnSearch: {
       ...EMPTY_SEARCH,
       ...(safeFilters.columnSearch || {}),
@@ -68,10 +91,12 @@ const areFiltersEqual = (left = {}, right = {}) => {
 
   return (
     a.selectedType === b.selectedType &&
-    a.selectedCategory === b.selectedCategory &&
+    a.selectedCategories.length === b.selectedCategories.length &&
+    a.selectedCategories.every((value, index) => value === b.selectedCategories[index]) &&
     a.startDate === b.startDate &&
     a.endDate === b.endDate &&
-    a.selectedLabel === b.selectedLabel &&
+    a.selectedLabels.length === b.selectedLabels.length &&
+    a.selectedLabels.every((value, index) => value === b.selectedLabels[index]) &&
     a.sortConfig.key === b.sortConfig.key &&
     a.sortConfig.direction === b.sortConfig.direction &&
     Object.keys(EMPTY_SEARCH).every(
@@ -126,16 +151,17 @@ const ExpenseTracker = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [userName, setUserName] = useState("");
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [currentDateLabel, setCurrentDateLabel] = useState("");
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
   const [pendingNavigation, setPendingNavigation] = useState("");
 
   // ── Filters (dropdown / date-range) ──────────────────────────────────────
   const [selectedType, setSelectedType] = useState("All");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [selectedLabel, setSelectedLabel] = useState("All");
+  const [selectedLabels, setSelectedLabels] = useState([]);
 
   // ── Column search (ALL server-side) ──────────────────────────────────────
   const [columnSearch, setColumnSearch] = useState(EMPTY_SEARCH);
@@ -147,9 +173,9 @@ const ExpenseTracker = ({
   });
 
   // ── Supporting data ───────────────────────────────────────────────────────
-  const [categoryOptions, setCategoryOptions] = useState(["All"]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [labelMap, setLabelMap] = useState({});
-  const [labelOptions, setLabelOptions] = useState(["All"]);
+  const [labelOptions, setLabelOptions] = useState([]);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const dropdownRef = useRef(null);
@@ -168,19 +194,19 @@ const ExpenseTracker = ({
     () =>
       normalizeFiltersForComparison({
         selectedType,
-        selectedCategory,
+        selectedCategories,
         startDate,
         endDate,
-        selectedLabel,
+        selectedLabels,
         columnSearch,
         sortConfig,
       }),
     [
       selectedType,
-      selectedCategory,
+      selectedCategories,
       startDate,
       endDate,
-      selectedLabel,
+      selectedLabels,
       columnSearch,
       sortConfig,
     ],
@@ -220,11 +246,11 @@ const ExpenseTracker = ({
   const snapshotFilters = useCallback(
     (overrides = {}) => {
       filtersRef.current = {
-        selectedCategory,
+        selectedCategories,
         selectedType,
         startDate,
         endDate,
-        selectedLabel,
+        selectedLabels,
         columnSearch,
         sortConfig,
         currentPage,
@@ -232,11 +258,11 @@ const ExpenseTracker = ({
       };
     },
     [
-      selectedCategory,
+      selectedCategories,
       selectedType,
       startDate,
       endDate,
-      selectedLabel,
+      selectedLabels,
       columnSearch,
       sortConfig,
       currentPage,
@@ -258,11 +284,11 @@ const ExpenseTracker = ({
     setIsLoadingPage(true);
     try {
       const filters = {
-        category: f.selectedCategory,
+        categories: f.selectedCategories,
         typeFilter: f.selectedType,
         startDate: f.startDate,
         endDate: f.endDate,
-        labelId: f.selectedLabel,
+        labelIds: f.selectedLabels,
         search: f.columnSearch,
         sortBy: f.sortConfig?.key || null,
         sortDir: f.sortConfig?.direction || "desc",
@@ -326,10 +352,10 @@ useEffect(() => {
   };
 
   setSelectedType(nextFilters.selectedType);
-  setSelectedCategory(nextFilters.selectedCategory);
+  setSelectedCategories(nextFilters.selectedCategories);
   setStartDate(nextFilters.startDate);
   setEndDate(nextFilters.endDate);
-  setSelectedLabel(nextFilters.selectedLabel);
+  setSelectedLabels(nextFilters.selectedLabels);
   setColumnSearch(nextFilters.columnSearch);
   setSortConfig(nextFilters.sortConfig);
   setCurrentPage(nextPage);
@@ -395,16 +421,25 @@ useEffect(() => {
           fetchCategories(),
           fetchLabels(),
         ]);
-        setCategoryOptions([
-          "All",
-          ...Array.from(new Set(cats.map((c) => c.name))),
-        ]);
+        setCategoryOptions(
+          Array.from(new Set(cats.map((c) => c.name))).sort((left, right) =>
+            left.localeCompare(right),
+          ),
+        );
         setLabelMap(
           Object.fromEntries(
             labels.map((l) => [l.id, { name: l.name, color: l.color }]),
           ),
         );
-        setLabelOptions(["All", ...labels.map((l) => l.id)]);
+        setLabelOptions(
+          labels
+            .map((label) => ({
+              value: label.id,
+              label: label.name,
+              color: label.color,
+            }))
+            .sort((left, right) => left.label.localeCompare(right.label)),
+        );
       } catch (e) {
         if (!e.message?.includes("Session expired"))
           toast.error("Failed to load categories or labels.");
@@ -482,18 +517,18 @@ useEffect(() => {
     );
     return (
       selectedType !== "All" ||
-      selectedCategory !== "All" ||
+      selectedCategories.length > 0 ||
       startDate !== "" ||
       endDate !== "" ||
-      selectedLabel !== "All" ||
+      selectedLabels.length > 0 ||
       hasColumnSearch
     );
   }, [
     selectedType,
-    selectedCategory,
+    selectedCategories,
     startDate,
     endDate,
-    selectedLabel,
+    selectedLabels,
     columnSearch,
   ]);
 
@@ -657,20 +692,20 @@ useEffect(() => {
   }, []);
 
   const activeInsightKey = useMemo(() => {
-    if (selectedLabel !== "All") {
-      return `labels:${selectedLabel}`;
+    if (selectedLabels.length === 1) {
+      return `labels:${selectedLabels[0]}`;
     }
 
     if (
       selectedType !== "All" &&
-      selectedCategory !== "All" &&
+      selectedCategories.length === 1 &&
       (selectedType === "debit" || selectedType === "credit")
     ) {
-      return `${selectedType}:${selectedCategory}`;
+      return `${selectedType}:${selectedCategories[0]}`;
     }
 
     return null;
-  }, [selectedLabel, selectedType, selectedCategory]);
+  }, [selectedLabels, selectedType, selectedCategories]);
 
   const handleInsightSelection = useCallback(
     (sectionKey, item) => {
@@ -680,19 +715,19 @@ useEffect(() => {
         sectionKey === "labels"
           ? {
               selectedType,
-              selectedCategory,
+              selectedCategories,
               startDate,
               endDate,
-              selectedLabel: item.id || "All",
+              selectedLabels: item.id ? [item.id] : [],
               columnSearch,
               sortConfig,
             }
           : {
               selectedType: sectionKey,
-              selectedCategory: item.name,
+              selectedCategories: item.name ? [item.name] : [],
               startDate,
               endDate,
-              selectedLabel,
+              selectedLabels,
               columnSearch,
               sortConfig,
             };
@@ -700,8 +735,8 @@ useEffect(() => {
       if (isTransactionsView) {
         setFilterOpen(true);
         setSelectedType(nextFilters.selectedType);
-        setSelectedCategory(nextFilters.selectedCategory);
-        setSelectedLabel(nextFilters.selectedLabel);
+        setSelectedCategories(nextFilters.selectedCategories);
+        setSelectedLabels(nextFilters.selectedLabels);
         requestDataRefresh(nextFilters, 1);
         window.requestAnimationFrame(() => {
           transactionsSectionRef.current?.scrollIntoView({
@@ -731,8 +766,8 @@ useEffect(() => {
       isTransactionsView,
       navigateWithLoader,
       requestDataRefresh,
-      selectedCategory,
-      selectedLabel,
+      selectedCategories,
+      selectedLabels,
       selectedType,
       sortConfig,
       startDate,
@@ -742,19 +777,19 @@ useEffect(() => {
   const resetFilters = () => {
     setIsLoadingPage(true);
     setSelectedType("All");
-    setSelectedCategory("All");
+    setSelectedCategories([]);
     setStartDate("");
     setEndDate("");
-    setSelectedLabel("All");
+    setSelectedLabels([]);
     setColumnSearch(EMPTY_SEARCH);
     setSortConfig({ key: null, direction: "desc" });
     setCurrentPage(1);
     filtersRef.current = {
       selectedType: "All",
-      selectedCategory: "All",
+      selectedCategories: [],
       startDate: "",
       endDate: "",
-      selectedLabel: "All",
+      selectedLabels: [],
       columnSearch: EMPTY_SEARCH,
       sortConfig: { key: null, direction: "desc" },
       currentPage: 1,
@@ -765,118 +800,155 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────────────────────
   // PDF Export
   // ─────────────────────────────────────────────────────────────────────────
-  const handleExportPDF = () => {
-    const doc = new jsPDF();
+  const formatCurrency = (value) =>
+    Number(value || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const formatSelectedLabels = useCallback(
+    (labelIds = []) =>
+      labelIds
+        .map((id) => labelMap[id]?.name || id)
+        .filter(Boolean)
+        .join(", "),
+    [labelMap],
+  );
+
+  const appliedFilterRows = useMemo(() => {
+    const rows = [
+      ["Type", selectedType === "All" ? "All" : selectedType],
+      [
+        "Categories",
+        selectedCategories.length > 0
+          ? selectedCategories.join(", ")
+          : "All categories",
+      ],
+      [
+        "Date Range",
+        startDate && endDate
+          ? `${formatDate(startDate)} to ${formatDate(endDate)}`
+          : startDate
+            ? `From ${formatDate(startDate)}`
+            : endDate
+              ? `Until ${formatDate(endDate)}`
+              : "All dates",
+      ],
+      [
+        "Labels",
+        selectedLabels.length > 0
+          ? formatSelectedLabels(selectedLabels)
+          : "All labels",
+      ],
+      [
+        "Sort",
+        sortConfig?.key
+          ? `${sortConfig.key} (${sortConfig.direction || "desc"})`
+          : "Default newest-first order",
+      ],
+    ];
+
+    const searchSummary = Object.entries(columnSearch)
+      .filter(([, value]) => value.trim() !== "")
+      .map(([key, value]) => `${key}: ${value.trim()}`)
+      .join(" | ");
+
+    if (searchSummary) {
+      rows.push(["Search", searchSummary]);
+    }
+
+    return rows;
+  }, [
+    columnSearch,
+    endDate,
+    selectedCategories,
+    selectedLabels,
+    selectedType,
+    sortConfig,
+    startDate,
+    formatSelectedLabels,
+  ]);
+
+  const handleExportPDF = async () => {
+    setIsExportingPdf(true);
+
+    try {
+      const reportTransactions = await fetchAllTransactionsForFilters({
+        categories: selectedCategories,
+        typeFilter: selectedType,
+        startDate,
+        endDate,
+        labelIds: selectedLabels,
+        search: columnSearch,
+        sortBy: sortConfig?.key || null,
+        sortDir: sortConfig?.direction || "desc",
+      });
+
+      const doc = new jsPDF();
     const now = new Date();
     const dateStr = now.toISOString().split("T")[0];
     const timeStr = `${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
     const fileName = `ExpenseReport_${userName.replace(/\s+/g, "_")}_${dateStr}_${timeStr}.pdf`;
 
-    doc.setFillColor(245, 247, 250);
-    doc.rect(0, 0, 210, 297, "F");
-    doc.setFillColor(33, 150, 243);
-    doc.rect(0, 0, 210, 20, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("Expense Report", 105, 13, { align: "center" });
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, 0, 210, 297, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Transaction Report", 14, 18);
 
-    const closingBal =
-      transactions.length > 0 ? transactions[0].runningBalance : openingBalance;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Prepared on ${now.toLocaleString()}`, 14, 24);
 
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text("Summary", 14, 28);
-    autoTable(doc, {
-      startY: 34,
-      head: [["Metric", "Value"]],
-      body: [
-        [
-          "Total Expense",
-          totalExpense.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Total Credit",
-          totalIncome.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-        [
-          "Closing Balance",
-          closingBal.toLocaleString("en-IN", { minimumFractionDigits: 2 }),
-        ],
-      ],
-      theme: "grid",
-      styles: { fontSize: 11, valign: "middle" },
-      headStyles: {
-        fillColor: [76, 175, 80],
-        textColor: 255,
-        halign: "center",
-      },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [240, 248, 255] },
-      columnStyles: {
-        0: { halign: "left", fontStyle: "bold", cellWidth: 80 },
-        1: { halign: "right", cellWidth: 60 },
-      },
-    });
+      autoTable(doc, {
+        startY: 32,
+        head: [["Applied Filter", "Value"]],
+        body: appliedFilterRows,
+        theme: "striped",
+        styles: {
+          fontSize: 10,
+          cellPadding: 3.5,
+          textColor: [30, 41, 59],
+        },
+        headStyles: {
+          fillColor: [37, 99, 235],
+          textColor: 255,
+          fontStyle: "bold",
+          halign: "left",
+        },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+        columnStyles: {
+          0: { cellWidth: 45, fontStyle: "bold" },
+          1: { cellWidth: "auto" },
+        },
+      });
 
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text("Applied Filters", 14, doc.lastAutoTable.finalY + 12);
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 18,
-      head: [["Category", "Date Range"]],
-      body: [
-        [
-          selectedCategory !== "All" ? selectedCategory : "All",
-          startDate && endDate
-            ? `${formatDate(startDate)} To ${formatDate(endDate)}`
-            : "All Dates",
-        ],
-      ],
-      theme: "grid",
-      styles: { fontSize: 10, halign: "center" },
-      headStyles: { fillColor: [255, 152, 0], textColor: 255 },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [255, 243, 224] },
-    });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Filtered Transactions", 14, doc.lastAutoTable.finalY + 12);
 
-    doc.setFontSize(14);
-    doc.setTextColor(33, 33, 33);
-    doc.text("Transactions", 14, doc.lastAutoTable.finalY + 12);
-    const rows = transactions.map((txn) => {
+      const rows = reportTransactions.map((txn) => {
       const amt = Number(txn.amount) || 0;
-      const lbl = Array.isArray(txn.labelIds)
-        ? txn.labelIds
-            .map((id) => labelMap[id]?.name || "")
-            .filter(Boolean)
-            .join(", ")
-        : "-";
-      return [
-        formatDate(txn.date),
-        txn.category,
-        txn.comments || "-",
-        lbl,
-        txn.type === "debit"
-          ? amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-          : "",
-        txn.type === "credit"
-          ? amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-          : "",
-        Number(txn.runningBalance).toLocaleString("en-IN", {
-          minimumFractionDigits: 2,
-        }),
-      ];
-    });
+        const lbl = Array.isArray(txn.labelIds)
+          ? txn.labelIds
+              .map((id) => labelMap[id]?.name || "")
+              .filter(Boolean)
+              .join(", ")
+          : "-";
+        return [
+          formatDate(txn.date),
+          txn.category,
+          txn.comments || "-",
+          lbl || "-",
+          txn.type === "debit" ? "Debit" : "Credit",
+          formatCurrency(amt),
+          formatCurrency(txn.runningBalance),
+        ];
+      });
 
-    if (!rows.length) {
-      doc.setFontSize(12);
-      doc.setTextColor(200, 0, 0);
-      doc.text(
-        "No transactions match the selected filters.",
-        14,
-        doc.lastAutoTable.finalY + 18,
-      );
-    } else {
       autoTable(doc, {
         head: [
           [
@@ -884,41 +956,92 @@ useEffect(() => {
             "Category",
             "Comments",
             "Labels",
-            "Debit",
-            "Credit",
+            "Type",
+            "Amount",
             "Balance",
           ],
         ],
         body: rows,
         startY: doc.lastAutoTable.finalY + 18,
-        styles: { fontSize: 9, valign: "middle" },
-        headStyles: {
-          fillColor: [63, 81, 181],
-          textColor: 255,
-          halign: "center",
+        theme: "striped",
+        styles: {
+          fontSize: 9,
+          valign: "middle",
+          cellPadding: 3,
         },
-        alternateRowStyles: { fillColor: [232, 234, 246] },
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: 255,
+          halign: "left",
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
         bodyStyles: { textColor: [33, 33, 33] },
         columnStyles: {
-          0: { halign: "center" },
-          1: { halign: "center" },
+          0: { halign: "center", cellWidth: 22 },
+          1: { cellWidth: 28 },
           2: { halign: "left" },
-          3: { halign: "left" },
-          4: { halign: "right", textColor: [200, 0, 0], fontStyle: "bold" },
-          5: { halign: "right", textColor: [0, 150, 0], fontStyle: "bold" },
-          6: { halign: "right", fontStyle: "bold" },
+          3: { halign: "left", cellWidth: 34 },
+          4: { halign: "center", cellWidth: 18 },
+          5: { halign: "right", fontStyle: "bold", cellWidth: 24 },
+          6: { halign: "right", fontStyle: "bold", cellWidth: 24 },
+        },
+        didParseCell: (data) => {
+          if (data.section !== "body") return;
+
+          if (data.column.index === 4) {
+            const isDebit = data.row.raw[4] === "Debit";
+            data.cell.styles.textColor = isDebit ? [220, 38, 38] : [22, 163, 74];
+            data.cell.styles.fontStyle = "bold";
+          }
+
+          if (data.column.index === 5) {
+            const isDebit = data.row.raw[4] === "Debit";
+            data.cell.styles.textColor = isDebit ? [220, 38, 38] : [22, 163, 74];
+            data.cell.styles.fontStyle = "bold";
+          }
         },
       });
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        head: [["Show All Transactions Summary", "Value"]],
+        body: [
+          ["Matching Transactions", String(reportTransactions.length)],
+          ["Total Debit", `₹${formatCurrency(totalExpense)}`],
+          ["Total Credit", `₹${formatCurrency(totalIncome)}`],
+          ["Closing Balance", `₹${formatCurrency(finalBalance)}`],
+        ],
+        theme: "grid",
+        styles: {
+          fontSize: 10,
+          cellPadding: 3.5,
+        },
+        headStyles: {
+          fillColor: [37, 99, 235],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          0: { fontStyle: "bold", cellWidth: 55 },
+          1: { halign: "right", cellWidth: 40 },
+        },
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(80);
+      doc.text(
+        `Report Date: ${now.toLocaleString()}`,
+        200,
+        doc.internal.pageSize.height - 10,
+        { align: "right" },
+      );
+      doc.save(fileName);
+    } catch (error) {
+      toast.error("Failed to export filtered PDF report.");
+    } finally {
+      setIsExportingPdf(false);
     }
-    doc.setFontSize(10);
-    doc.setTextColor(80);
-    doc.text(
-      `Report Date: ${new Date().toLocaleString()}`,
-      200,
-      doc.internal.pageSize.height - 10,
-      { align: "right" },
-    );
-    doc.save(fileName);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1323,21 +1446,22 @@ useEffect(() => {
           selectedType={selectedType}
           setSelectedType={(v) => handleFilterChange(setSelectedType, "selectedType", v)}
           categoryOptions={categoryOptions}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={(v) =>
-            handleFilterChange(setSelectedCategory, "selectedCategory", v)
+          selectedCategories={selectedCategories}
+          setSelectedCategories={(v) =>
+            handleFilterChange(setSelectedCategories, "selectedCategories", v)
           }
           startDate={startDate}
           setStartDate={(v) => handleFilterChange(setStartDate, "startDate", v)}
           endDate={endDate}
           setEndDate={(v) => handleFilterChange(setEndDate, "endDate", v)}
           labelOptions={labelOptions}
-          selectedLabel={selectedLabel}
-          setSelectedLabel={(v) =>
-            handleFilterChange(setSelectedLabel, "selectedLabel", v)
+          selectedLabels={selectedLabels}
+          setSelectedLabels={(v) =>
+            handleFilterChange(setSelectedLabels, "selectedLabels", v)
           }
+          sortConfig={sortConfig}
+          setSortConfig={(v) => handleFilterChange(setSortConfig, "sortConfig", v)}
           resetFilters={resetFilters}
-          labelMap={labelMap}
           loading={showTransactionResultsLoading || isLoadingPage}
         />
 
@@ -1430,7 +1554,7 @@ useEffect(() => {
                   </span>
                 )}
               </h2>
-              <table>
+              <table className="transaction-table">
                 <thead>
                   <tr>
                     {renderColumnHeader("date", "Date", "Search date…", "date")}
@@ -1480,8 +1604,8 @@ useEffect(() => {
                       </tr>
                     ))
                   ) : transactions.length > 0 ? (
-                    transactions.map((entry) => (
-                      <tr key={entry.id}>
+                    transactions.map((entry, index) => (
+                      <tr key={entry.id} className={`transaction-row ${index % 2 === 0 ? "row-even" : "row-odd"}`}>
                         <td>{formatDate(entry.date)}</td>
                         <td>{entry.category}</td>
                         <td>{entry.comments || "-"}</td>
@@ -1664,8 +1788,19 @@ useEffect(() => {
               className="export-pdf-fab"
               onClick={handleExportPDF}
               title="Export to PDF"
+              disabled={isExportingPdf}
             >
-              📄
+              {isExportingPdf ? (
+                <span className="btn-with-spinner">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  Exporting...
+                </span>
+              ) : (
+                <>
+                  <i className="bi bi-file-earmark-pdf-fill" aria-hidden="true" />
+                  <span>Export PDF</span>
+                </>
+              )}
             </button>
           </div>
         )}

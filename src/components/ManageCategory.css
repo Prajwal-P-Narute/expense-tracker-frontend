@@ -8,8 +8,8 @@
 
 /* Body */
 body {
-    background-color: #f5f7fa;
-    color: #333;
+    background-color: var(--surface-bg);
+    color: var(--text-primary);
     line-height: 1.6;
 }
 
@@ -52,10 +52,10 @@ h1 {
 .category-section {
     flex: 1;
     min-width: 350px;
-    background: white;
+    background: var(--surface-card);
     border-radius: 10px;
     padding: 25px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-soft);
 }
 
 /* Section Header */
@@ -65,12 +65,12 @@ h1 {
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 2px solid #f0f0f0;
+    border-bottom: 2px solid var(--border-soft);
 }
 
 h2 {
     font-size: 1.8rem;
-    color: #2c3e50;
+    color: var(--text-primary);
 }
 
 .debit-header {
@@ -90,9 +90,11 @@ h2 {
 .add-category-input {
     flex: 1;
     padding: 12px 15px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--input-border);
     border-radius: 6px 0 0 6px;
     font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text-primary);
 }
 
 .add-btn {
@@ -130,7 +132,7 @@ h2 {
     align-items: center;
     padding: 12px 15px;
     margin-bottom: 10px;
-    background: #f8f9fa;
+    background: var(--surface-muted);
     border-radius: 6px;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -195,7 +197,7 @@ h2 {
 }
 
 .modal-content {
-    background: white;
+    background: var(--surface-card);
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
@@ -216,7 +218,7 @@ h2 {
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--text-secondary);
 }
 
 /* Form Group */
@@ -233,9 +235,11 @@ h2 {
 .form-control {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text-primary);
 }
 
 /* Modal Actions */

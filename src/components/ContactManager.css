@@ -59,10 +59,10 @@
 }
 
 .contact-list {
-    background: white;
+    background: var(--surface-card);
     border-radius: 10px;
     padding: 15px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-soft);
 }
 
 .contact-item {
@@ -72,7 +72,7 @@
     align-items: center;
     padding: 15px;
     margin-bottom: 10px;
-    background: #f8f9fa;
+    background: var(--surface-muted);
     border-radius: 6px;
     border-left: 4px solid #007BFF;
     transition: transform 0.2s ease-in-out;
@@ -120,7 +120,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(245, 247, 250, 0.7); /* Lighter, semi-transparent background */
+    background: rgba(15, 23, 42, 0.55);
     backdrop-filter: blur(4px); /* Modern blur effect for the background */
     display: flex;
     justify-content: center;
@@ -128,7 +128,7 @@
     z-index: 1000;
 }
 .manager-container .modal-content {
-    background: white;
+    background: var(--surface-card);
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
@@ -142,7 +142,7 @@
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-soft);
 }
 
 .manager-container .close-btn {
@@ -150,7 +150,7 @@
     border: none;
     font-size: 1.8rem;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--text-secondary);
     padding: 0;
     line-height: 1;
 }
@@ -165,9 +165,11 @@
 .manager-container .form-control {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text-primary);
 }
 
 /* NEW: Style for error input */
@@ -213,16 +215,16 @@
     text-align: center;
     padding: 40px;
     font-size: 1.2rem;
-    color: #6c757d;
-    background: white;
+    color: var(--text-secondary);
+    background: var(--surface-card);
     border-radius: 8px;
 }
 
 .contact-list {
-    background: white;
+    background: var(--surface-card);
     border-radius: 10px;
     padding: 15px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-soft);
 
     max-height: 520px;            /* ~10 items */
     overflow-y: auto;
@@ -249,7 +251,7 @@
 
 .input-error {
   border: 1px solid #d32f2f !important;
-  background-color: #fff5f5;
+  background-color: rgba(254, 242, 242, 0.92);
 }
 
 /* Modern contact manager */

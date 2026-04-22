@@ -11,16 +11,25 @@ import ManageCategory from './components/ManageCategory';
 import ManageLabel from './components/ManageLabel';
 import FinTrack from './components/FinTrack';
 import ContactManager from './components/ContactManager';
-import { getInitialTheme, THEME_STORAGE_KEY } from './utils/theme';
+import AppQuickActions from './components/AppQuickActions';
+import {
+  COLOR_MODE_STORAGE_KEY,
+  COLOR_MODES,
+  getInitialColorMode,
+  getInitialTheme,
+  THEME_STORAGE_KEY,
+} from './utils/theme';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [theme, setTheme] = useState(getInitialTheme);
+  const [colorMode, setColorMode] = useState(getInitialColorMode);
 
   useEffect(() => {
     const handleStorage = () => {
       setToken(localStorage.getItem("token"));
       setTheme(getInitialTheme());
+      setColorMode(getInitialColorMode());
     };
 
     window.addEventListener("storage", handleStorage);
@@ -34,6 +43,11 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-color-mode", colorMode);
+    localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorMode);
+  }, [colorMode]);
 
 
   return (
@@ -126,6 +140,18 @@ function App() {
 
       <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>
+    <AppQuickActions
+      visible
+      showThemeToggle={!!token}
+      isDarkMode={colorMode === COLOR_MODES.DARK}
+      onToggleDarkMode={() =>
+        setColorMode((currentMode) =>
+          currentMode === COLOR_MODES.DARK
+            ? COLOR_MODES.LIGHT
+            : COLOR_MODES.DARK,
+        )
+      }
+    />
     <ToastContainer/>
      </>
     

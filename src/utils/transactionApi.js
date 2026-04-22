@@ -25,17 +25,28 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
+function appendMultiValueParam(params, key, values) {
+  if (!Array.isArray(values)) return;
+
+  values
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value && value !== "All")
+    .forEach((value) => params.append(key, value));
+}
+
 function buildTransactionFilterParams(filters = {}, includeSort = false) {
   const params = new URLSearchParams();
   let typeFilter =
     filters.typeFilter && filters.typeFilter !== "All" ? filters.typeFilter : "";
 
+  appendMultiValueParam(params, "category", filters.categories);
   if (filters.category && filters.category !== "All")
     params.append("category", filters.category);
   if (filters.startDate)
     params.append("startDate", filters.startDate);
   if (filters.endDate)
     params.append("endDate", filters.endDate);
+  appendMultiValueParam(params, "labelId", filters.labelIds);
   if (filters.labelId && filters.labelId !== "All")
     params.append("labelId", filters.labelId);
 
@@ -285,6 +296,28 @@ export async function fetchContactTransactions(page = 0, pageSize = 20, contactI
   );
   if (!res.ok) throw new Error("Failed to load contact transactions");
   return res.json();
+}
+
+export async function fetchAllTransactionsForFilters(filters = {}) {
+  const allTransactions = [];
+  let page = 0;
+  let totalPages = 1;
+
+  while (page < totalPages) {
+    const data = await fetchTransactionsPageable(page, 250, filters);
+    const content = Array.isArray(data?.content) ? data.content : [];
+
+    allTransactions.push(...content);
+    totalPages = Number(data?.totalPages) || 0;
+
+    if (totalPages === 0) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return allTransactions;
 }
 
 export async function createTransaction(payload) {

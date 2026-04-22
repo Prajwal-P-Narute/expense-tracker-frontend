@@ -1,4 +1,9 @@
 export const THEME_STORAGE_KEY = "et_theme";
+export const COLOR_MODE_STORAGE_KEY = "et_color_mode";
+export const COLOR_MODES = {
+  LIGHT: "light",
+  DARK: "dark",
+};
 
 export const THEME_OPTIONS = [
   {
@@ -30,4 +35,15 @@ export function isValidTheme(theme) {
 export function getInitialTheme() {
   const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   return isValidTheme(storedTheme) ? storedTheme : DEFAULT_THEME;
+}
+
+export function isValidColorMode(mode) {
+  return Object.values(COLOR_MODES).includes(mode);
+}
+
+export function getInitialColorMode() {
+  const storedColorMode = localStorage.getItem(COLOR_MODE_STORAGE_KEY);
+  return isValidColorMode(storedColorMode)
+    ? storedColorMode
+    : COLOR_MODES.LIGHT;
 }
